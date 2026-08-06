@@ -1,0 +1,32 @@
+.glass{
+
+background:
+rgba(255,255,255,.05);
+
+backdrop-filter:blur(20px);
+
+border:
+
+1px solid rgba(255,255,255,.08);
+
+}
+
+.green-glow{
+
+box-shadow:
+
+0 0 50px rgba(124,255,59,.25);
+
+}
+
+.card-hover{
+
+transition:.35s;
+
+}
+
+.card-hover:hover{
+
+transform:translateY(-8px);
+
+}

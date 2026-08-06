@@ -1,0 +1,147 @@
+@import "tailwindcss";
+@import "../styles/colors.css";
+@import "../styles/typography.css";
+@import "../styles/spacing.css";
+@import "../styles/animations.css";
+@import "../styles/utilities.css";
+
+:root {
+  --background: #080b0f;
+  --foreground: #f5f7fa;
+
+  --surface: #11161d;
+  --surface-2: #171d25;
+  --surface-3: #202733;
+
+  --border: rgba(255,255,255,.08);
+
+  --primary: #7CFF32;
+  --primary-hover: #68e326;
+
+  --secondary: #9ca3af;
+
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --success: #22c55e;
+
+  --shadow-card: 0 15px 40px rgba(0,0,0,.45);
+}
+
+@theme inline {
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+
+  --color-border: var(--border);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+
+  --color-secondary: var(--secondary);
+
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+
+  --shadow-card: var(--shadow-card);
+
+  --font-display: var(--font-heading);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-code);
+}
+
+@layer base {
+
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+}
+
+html{
+  background:var(--background);
+}
+
+body{
+
+  background:var(--background);
+
+  color:var(--foreground);
+
+  font-family:var(--font-body),sans-serif;
+
+  min-height:100vh;
+
+  text-rendering:optimizeLegibility;
+
+}
+
+::selection{
+
+  background:var(--primary);
+
+  color:#000;
+
+}
+
+button{
+
+cursor:pointer;
+
+transition:.25s;
+
+}
+
+a{
+
+text-decoration:none;
+
+color:inherit;
+
+}
+
+img{
+
+display:block;
+
+max-width:100%;
+
+}
+
+}
+.hero-glow{
+  position:absolute;
+  width:700px;
+  height:700px;
+  background:radial-gradient(circle,#7CFF3B22 0%,transparent 70%);
+  filter:blur(90px);
+  top:-200px;
+  right:-150px;
+  z-index:0;
+  pointer-events:none;
+}
+
+.hero-grid{
+  position:relative;
+  overflow:hidden;
+}
+
+.hero-grid::before{
+  content:"";
+  position:absolute;
+  inset:0;
+
+  background-image:
+  linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);
+
+  background-size:50px 50px;
+
+  opacity:.35;
+
+  pointer-events:none;
+}
