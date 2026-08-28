@@ -3,6 +3,7 @@ import { Hero } from "./hero/hero";
 import { FeaturedTrainers } from "./featured-trainers/featured-trainers";
 import { Categories } from "./categories/categories";
 import { Features } from "./features/features";
+import { Pricing } from "./pricing/pricing";
 import { Stats } from "./stats/stats";
 import { Testimonials } from "./testimonials/testimonials";
 import { Footer } from "./footer/footer";
@@ -15,6 +16,7 @@ export function LandingPageV2() {
       <FeaturedTrainers />
       <Categories />
       <Features />
+      <Pricing />
       <Stats />
       <Testimonials />
       <Footer />

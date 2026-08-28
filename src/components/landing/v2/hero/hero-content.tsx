@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { motion } from "framer-motion";
 
 export function HeroContent() {
@@ -27,6 +28,21 @@ export function HeroContent() {
         purchase personalized coaching plans and achieve your dream physique
         with real experts.
       </p>
+
+      <div className="flex flex-wrap gap-4 pt-2">
+        <Link
+          href="/trainers"
+          className="inline-flex items-center justify-center rounded-2xl bg-[#7CFF3B] px-8 py-4 text-base font-bold text-black transition-all duration-300 hover:scale-105 hover:bg-[#68e326] hover:shadow-[0_0_30px_rgba(124,255,59,0.3)]"
+        >
+          Browse Trainers →
+        </Link>
+        <Link
+          href="/pricing"
+          className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-8 py-4 text-base font-bold text-white transition-all duration-300 hover:border-[#7CFF3B] hover:text-[#7CFF3B]"
+        >
+          View Pricing
+        </Link>
+      </div>
     </motion.div>
   );
 }

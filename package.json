@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "prisma generate",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "tsx --env-file=.env src/app/api/seed/route.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
@@ -15,6 +20,8 @@
     "clsx": "^2.1.1",
     "framer-motion": "^13.0.0",
     "jsonwebtoken": "^9.0.3",
+    "livekit-client": "^2.22.1",
+    "livekit-server-sdk": "^2.18.0",
     "next": "16.2.12",
     "prisma": "^7.9.1",
     "react": "19.2.4",

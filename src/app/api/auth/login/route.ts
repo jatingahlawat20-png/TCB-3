@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/prisma";
+import { signAuthToken, setAuthCookie } from "@/lib/auth";
 
 export async function POST(request: Request) {
   try {
@@ -14,9 +14,11 @@ export async function POST(request: Request) {
       );
     }
 
+    const normalizedEmail = email.toLowerCase().trim();
+
     const user = await prisma.user.findUnique({
       where: {
-        email: email.toLowerCase().trim(),
+        email: normalizedEmail,
       },
     });
 
@@ -27,10 +29,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const passwordCorrect = await bcrypt.compare(
-      password,
-      user.password
-    );
+    const passwordCorrect = await bcrypt.compare(password, user.password);
 
     if (!passwordCorrect) {
       return NextResponse.json(
@@ -39,20 +38,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const secret = process.env.JWT_SECRET;
+    const token = signAuthToken({
+      userId: user.id,
+      role: user.role,
+    });
 
-    if (!secret) {
-      throw new Error("JWT_SECRET is not configured");
-    }
-
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        role: user.role,
-      },
-      secret,
-      { expiresIn: "7d" }
-    );
+    const redirectTo =
+      user.role === "TRAINER"
+        ? "/trainer/dashboard"
+        : user.role === "ADMIN"
+        ? "/admin"
+        : "/dashboard";
 
     const response = NextResponse.json({
       message: "Login successful",
@@ -62,22 +58,17 @@ export async function POST(request: Request) {
         email: user.email,
         role: user.role,
       },
+      redirectTo,
     });
 
-    response.cookies.set("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7,
-      path: "/",
-    });
+    setAuthCookie(response, token);
 
     return response;
   } catch (error) {
     console.error("Login error:", error);
 
     return NextResponse.json(
-      { error: "Unable to login" },
+      { error: "Unable to process login. Please try again." },
       { status: 500 }
     );
   }

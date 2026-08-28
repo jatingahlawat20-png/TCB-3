@@ -1,7 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Prisma schema
 
 generator client {
   provider = "prisma-client"
@@ -18,6 +15,35 @@ enum Role {
   ADMIN
 }
 
+enum CoachingRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  FILE
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum SessionStatus {
+  SCHEDULED
+  LIVE
+  COMPLETED
+  CANCELLED
+  MISSED
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -28,16 +54,473 @@ model User {
   updatedAt DateTime @updatedAt
 
   trainerProfile TrainerProfile?
+
+  coachingRequestsSent CoachingRequest[] @relation("ClientRequests")
+
+  // Chat Relations
+  conversationsAsClient Conversation[] @relation("ClientConversations")
+  messagesSent          Message[]      @relation("SentMessages")
+
+  // Payment Relations
+  paymentsMade          Payment[]      @relation("ClientPayments")
+
+  // Session Relations
+  sessionsAsClient      CoachingSession[] @relation("ClientSessions")
+
+  // Program & Workout Relations
+  workoutProgramsAsClient WorkoutProgram[] @relation("ClientPrograms")
+  workoutLogs           WorkoutLog[]     @relation("ClientWorkoutLogs")
+
+  // Nutrition Relations
+  nutritionPlansAsClient NutritionPlan[] @relation("ClientNutritionPlans")
+  foodLogs              FoodLog[]        @relation("ClientFoodLogs")
+  waterLogs             WaterLog[]       @relation("ClientWaterLogs")
+}
+
+enum TrainerStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+  SUSPENDED
 }
 
 model TrainerProfile {
-  id           String @id @default(cuid())
-  userId       String @unique
+  id           String        @id @default(cuid())
+  userId       String        @unique
   bio          String?
   specialty    String?
   experience   Int?
   price        Float?
-  verified     Boolean @default(false)
+  verified     Boolean       @default(false)
+  status       TrainerStatus @default(PENDING)
+  isPublic     Boolean       @default(true)
+  rating       Float?        @default(4.9)
+  clientsCount Int?          @default(0)
+  avatarUrl    String?
+  tags         String[]      @default([])
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  packages         CoachingPackage[]
+  coachingRequests CoachingRequest[] @relation("TrainerRequests")
+
+  // Chat Relations
+  conversations    Conversation[]    @relation("TrainerConversations")
+
+  // Payment Relations
+  paymentsReceived Payment[]         @relation("TrainerPayments")
+
+  // Session Relations
+  sessionsAsTrainer CoachingSession[] @relation("TrainerSessions")
+
+  // Program Relations
+  workoutPrograms   WorkoutProgram[]  @relation("TrainerPrograms")
+
+  // Nutrition Relations
+  nutritionPlans    NutritionPlan[]   @relation("TrainerNutritionPlans")
+
+  @@index([status, verified])
+  @@index([status, isPublic])
+}
+
+model CoachingPackage {
+  id          String   @id @default(cuid())
+  trainerId   String
+  name        String
+  description String
+  duration    String
+  price       Float
+  benefits    String[]
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  trainer          TrainerProfile    @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  coachingRequests CoachingRequest[]
+  payments         Payment[]
+
+  @@index([trainerId])
+  @@index([active])
+}
+
+model CoachingRequest {
+  id            String                 @id @default(cuid())
+  clientId      String
+  trainerId     String
+  packageId     String?
+  message       String
+  goal          String
+  startDate     DateTime
+  status        CoachingRequestStatus @default(PENDING)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  client        User             @relation("ClientRequests", fields: [clientId], references: [id], onDelete: Cascade)
+  trainer       TrainerProfile   @relation("TrainerRequests", fields: [trainerId], references: [id], onDelete: Cascade)
+  package       CoachingPackage? @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  sessions      CoachingSession[]
+
+  @@index([clientId])
+  @@index([trainerId])
+  @@index([packageId])
+  @@index([status])
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  clientId  String
+  trainerId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client   User           @relation("ClientConversations", fields: [clientId], references: [id], onDelete: Cascade)
+  trainer  TrainerProfile @relation("TrainerConversations", fields: [trainerId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@unique([clientId, trainerId])
+  @@index([clientId])
+  @@index([trainerId])
+  @@index([updatedAt])
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  senderId       String
+  content        String
+  messageType    MessageType @default(TEXT)
+  mediaUrl       String?
+  readAt         DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@index([readAt])
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  clientId          String
+  trainerId         String
+  packageId         String?
+  coachingRequestId String?
+
+  // Amounts in integer minor units (paise)
+  amount            Int           // e.g. 99900 paise = ₹999
+  currency          String        @default("INR")
+  platformFeeRate   Float         @default(0.10) // 10%
+  platformFee       Int           // e.g. 9990 paise = ₹99.90
+  trainerEarnings   Int           // e.g. 89910 paise = ₹899.10
+
+  status            PaymentStatus @default(PENDING)
+
+  // Razorpay attributes
+  razorpayOrderId   String        @unique
+  razorpayPaymentId String?       @unique
+  razorpaySignature String?
+
+  // Idempotency & Metadata
+  idempotencyKey    String?       @unique
+  failureReason     String?
+  paidAt            DateTime?
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  client            User          @relation("ClientPayments", fields: [clientId], references: [id], onDelete: Cascade)
+  trainer           TrainerProfile @relation("TrainerPayments", fields: [trainerId], references: [id], onDelete: Cascade)
+  package           CoachingPackage? @relation(fields: [packageId], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+  @@index([trainerId])
+  @@index([packageId])
+  @@index([status])
+  @@index([razorpayOrderId])
+  @@index([createdAt])
+}
+
+model CoachingSession {
+  id                String        @id @default(cuid())
+  clientId          String
+  trainerId         String
+  coachingRequestId String?
+  packageId         String?
+
+  title             String        // e.g. "Strength Training — Upper Body"
+  description       String?       // Workout agenda / coaching notes
+  
+  scheduledStart    DateTime
+  scheduledEnd      DateTime
+  duration          Int           // Duration in minutes (e.g. 30, 45, 60, 90)
+  
+  status            SessionStatus @default(SCHEDULED)
+  
+  videoProvider     String        @default("livekit")
+  videoRoomId       String        @unique // e.g. "tcb3_room_cmt..."
+  
+  startedAt         DateTime?
+  endedAt           DateTime?
+  
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  client            User             @relation("ClientSessions", fields: [clientId], references: [id], onDelete: Cascade)
+  trainer           TrainerProfile   @relation("TrainerSessions", fields: [trainerId], references: [id], onDelete: Cascade)
+  coachingRequest   CoachingRequest? @relation(fields: [coachingRequestId], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+  @@index([trainerId])
+  @@index([status])
+  @@index([scheduledStart])
+}
+
+enum ProgramStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+model WorkoutProgram {
+  id                String         @id @default(cuid())
+  trainerId         String
+  clientId          String
+  name              String
+  description       String?
+  goal              String
+  durationWeeks     Int            @default(4)
+  trainingFrequency String?        // e.g. "4 days / week"
+  status            ProgramStatus  @default(ACTIVE)
+  notes             String?        // Coach notes & guidelines
+  startDate         DateTime
+  endDate           DateTime?
+  isActive          Boolean        @default(true)
+  weeklyStructure   String?        // e.g. "4 Days / Week (Upper/Lower Split)"
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  trainer           TrainerProfile @relation("TrainerPrograms", fields: [trainerId], references: [id], onDelete: Cascade)
+  client            User           @relation("ClientPrograms", fields: [clientId], references: [id], onDelete: Cascade)
+  workoutDays       WorkoutDay[]
+  workoutLogs       WorkoutLog[]
+
+  @@index([trainerId])
+  @@index([clientId])
+  @@index([status])
+  @@index([isActive])
+}
+
+model WorkoutDay {
+  id          String            @id @default(cuid())
+  programId   String
+  name        String            // e.g. "Day 1: Upper Body Strength"
+  weekNumber  Int               @default(1)
+  dayOfWeek   Int?              // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  orderIndex  Int               @default(0)
+  description String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  program     WorkoutProgram    @relation(fields: [programId], references: [id], onDelete: Cascade)
+  exercises   WorkoutExercise[]
+  workoutLogs WorkoutLog[]
+
+  @@index([programId])
+  @@index([weekNumber])
+  @@index([orderIndex])
+}
+
+model WorkoutExercise {
+  id           String        @id @default(cuid())
+  workoutDayId String
+  name         String        // e.g. "Barbell Bench Press"
+  muscleGroup  String        // e.g. "Chest", "Back", "Legs", "Shoulders", "Arms", "Core", "Full Body"
+  sets         Int
+  reps         String        // e.g. "8-10", "12", "5"
+  targetWeight String?       // e.g. "80 kg", "Bodyweight"
+  rpeTarget    String?       // e.g. "RPE 8" or "2 RIR"
+  restSeconds  Int           @default(60) // seconds (e.g. 90)
+  tempo        String?       // e.g. "3-0-1-0"
+  notes        String?
+  videoUrl     String?       // optional exercise demo video URL
+  isWarmup     Boolean       @default(false)
+  orderIndex   Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  workoutDay   WorkoutDay    @relation(fields: [workoutDayId], references: [id], onDelete: Cascade)
+  exerciseLogs ExerciseLog[]
+
+  @@index([workoutDayId])
+  @@index([orderIndex])
+}
+
+model WorkoutLog {
+  id               String          @id @default(cuid())
+  clientId         String
+  programId        String?
+  workoutDayId     String?
+  workoutName      String          // e.g. "Day 1: Upper Body Strength"
+  startedAt        DateTime        @default(now())
+  completedAt      DateTime?
+  durationMinutes  Int?
+  completionRate   Float           @default(0) // Percentage (0.0 to 100.0)
+  totalVolume      Float?          // Total weight × reps volume in kg
+  rpe              Int?            // Rate of Perceived Exertion (1-10)
+  difficultyRating Int?            // Difficulty rating (1-5)
+  energyRating     Int?            // Energy rating (1-5)
+  feedbackNotes    String?         // Client note to coach
+  notes            String?
+  isPersonalBest   Boolean         @default(false)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  client           User            @relation("ClientWorkoutLogs", fields: [clientId], references: [id], onDelete: Cascade)
+  program          WorkoutProgram? @relation(fields: [programId], references: [id], onDelete: SetNull)
+  workoutDay       WorkoutDay?     @relation(fields: [workoutDayId], references: [id], onDelete: SetNull)
+  exerciseLogs     ExerciseLog[]
+
+  @@index([clientId])
+  @@index([programId])
+  @@index([workoutDayId])
+  @@index([createdAt])
+}
+
+model ExerciseLog {
+  id                String           @id @default(cuid())
+  workoutLogId      String
+  workoutExerciseId String?
+  exerciseName      String
+  setsCompleted     Int              @default(0)
+  targetSets        Int              @default(0)
+  actualReps        String?          // e.g. "10, 10, 8, 8"
+  actualWeight      String?          // e.g. "80kg, 80kg, 82.5kg, 82.5kg"
+  rpe               Int?
+  totalVolume       Float?           // Calculated volume for this exercise
+  isPersonalBest    Boolean          @default(false)
+  isCompleted       Boolean          @default(false)
+  notes             String?
+  orderIndex        Int              @default(0)
+  createdAt         DateTime         @default(now())
+
+  workoutLog        WorkoutLog       @relation(fields: [workoutLogId], references: [id], onDelete: Cascade)
+  workoutExercise   WorkoutExercise? @relation(fields: [workoutExerciseId], references: [id], onDelete: SetNull)
+
+  @@index([workoutLogId])
+  @@index([workoutExerciseId])
+}
+
+enum NutritionGoal {
+  FAT_LOSS
+  MUSCLE_GAIN
+  MAINTENANCE
+  PERFORMANCE
+}
+
+enum NutritionPlanStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+  PRE_WORKOUT
+  POST_WORKOUT
+}
+
+model NutritionPlan {
+  id              String              @id @default(cuid())
+  trainerId       String
+  clientId        String
+  name            String              @default("Personalized Nutrition Plan")
+  goal            NutritionGoal       @default(MUSCLE_GAIN)
+  status          NutritionPlanStatus @default(ACTIVE)
+  dailyCalories   Int                 // e.g. 2600
+  proteinGrams    Float               // e.g. 160.0
+  carbsGrams      Float               // e.g. 310.0
+  fatGrams        Float               // e.g. 75.0
+  fiberGrams      Float               @default(30.0) // e.g. 30.0
+  waterLiters     Float               @default(3.0)  // e.g. 3.0
+  targetWeight    Float?              // optional target weight in kg
+  mealStructure   String?             // e.g. "4 Meals: Breakfast, Lunch, Post-Workout, Dinner"
+  trainerNotes    String?
+  isActive        Boolean             @default(true)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  trainer         TrainerProfile      @relation("TrainerNutritionPlans", fields: [trainerId], references: [id], onDelete: Cascade)
+  client          User                @relation("ClientNutritionPlans", fields: [clientId], references: [id], onDelete: Cascade)
+  targetHistory   NutritionTargetHistory[]
+
+  @@index([trainerId])
+  @@index([clientId])
+  @@index([status])
+  @@index([isActive])
+}
+
+model NutritionTargetHistory {
+  id              String        @id @default(cuid())
+  nutritionPlanId String
+  changedById     String
+  dailyCalories   Int
+  proteinGrams    Float
+  carbsGrams      Float
+  fatGrams        Float
+  fiberGrams      Float
+  waterLiters     Float
+  targetWeight    Float?
+  changeReason    String?
+  createdAt       DateTime      @default(now())
+
+  nutritionPlan   NutritionPlan @relation(fields: [nutritionPlanId], references: [id], onDelete: Cascade)
+
+  @@index([nutritionPlanId])
+  @@index([createdAt])
+}
+
+model FoodLog {
+  id              String        @id @default(cuid())
+  clientId        String
+  mealType        MealType      @default(BREAKFAST)
+  foodName        String        // e.g. "Grilled Chicken Breast"
+  servingAmount   Float         @default(1)
+  servingUnit     String        @default("serving") // e.g. "g", "oz", "scoop", "serving"
+  calories        Float         // calculated for the serving
+  protein         Float         // in grams
+  carbohydrates   Float         // in grams
+  fat             Float         // in grams
+  fiber           Float         @default(0) // in grams
+  notes           String?
+  loggedDate      DateTime      @default(now())
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  client          User          @relation("ClientFoodLogs", fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([loggedDate])
+  @@index([mealType])
+}
+
+model WaterLog {
+  id              String        @id @default(cuid())
+  clientId        String
+  amountLiters    Float         // e.g. 0.5 for 500ml
+  loggedDate      DateTime      @default(now())
+  createdAt       DateTime      @default(now())
+
+  client          User          @relation("ClientWaterLogs", fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([loggedDate])
 }
