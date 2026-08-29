@@ -170,22 +170,187 @@ export default async function ClientDashboardPage() {
     console.error("Error fetching client dashboard data:", err);
   }
 
+  // 1. Helper to determine if a coaching request or trainer relationship has a verified payment
   const isRequestPaid = (req: any) => {
     return rawPaymentsData.some(
       (p) =>
-        p.status === "PAID" &&
+        p.status?.toUpperCase() === "PAID" &&
         (p.coachingRequestId === req.id ||
-          (p.trainerId === req.trainerId && p.packageId === req.packageId && p.clientId === user.id))
+          (p.trainerId === req.trainerId && (p.packageId === req.packageId || !req.packageId || !p.packageId)))
     );
   };
 
-  const activePaidRequest = sentRequests.find(
-    (r) => r.status === "ACCEPTED" && isRequestPaid(r)
-  );
-  const pendingPaymentRequest = sentRequests.find(
-    (r) => r.status === "ACCEPTED" && !isRequestPaid(r)
-  );
-  const pendingReviewRequest = sentRequests.find((r) => r.status === "PENDING");
+  // 2. Comprehensive Multi-Source Active Coaching Resolution
+  // Source A: Verified PAID payment (Highest Priority)
+  const latestPaidPayment = rawPaymentsData.find((p) => p.status?.toUpperCase() === "PAID");
+
+  // Source B: Accepted Coaching Request
+  const acceptedRequest = sentRequests.find((r) => r.status?.toUpperCase() === "ACCEPTED");
+  const isAcceptedPaid = acceptedRequest ? isRequestPaid(acceptedRequest) : false;
+
+  // Source C: Active Workout Program assigned by a coach
+  const activeProgramWithCoach = activeWorkoutProgram?.trainer ? activeWorkoutProgram : null;
+
+  let activeCoaching: {
+    trainerId: string;
+    trainerName: string;
+    trainerEmail: string;
+    trainerSpecialty: string;
+    trainerBio?: string | null;
+    trainerAvatarUrl?: string | null;
+    trainerRating: number;
+    trainerExperience: number;
+    packageName: string;
+    packageDuration: string;
+    packagePrice: number;
+    packageBenefits: string[];
+    startDate: Date;
+    endDate: Date;
+    daysRemaining: number;
+    goal: string;
+    coachingRequestId?: string;
+    paymentId?: string;
+    isPaid: boolean;
+    statusBadgeText: string;
+  } | null = null;
+
+  if (latestPaidPayment && latestPaidPayment.trainer?.user) {
+    const matchingReq = sentRequests.find(
+      (r) => r.id === latestPaidPayment.coachingRequestId || r.trainerId === latestPaidPayment.trainerId
+    );
+    const startDate = latestPaidPayment.paidAt
+      ? new Date(latestPaidPayment.paidAt)
+      : latestPaidPayment.createdAt
+      ? new Date(latestPaidPayment.createdAt)
+      : new Date();
+    const durationStr = latestPaidPayment.package?.duration || matchingReq?.package?.duration || "1 Month";
+
+    const endDate = new Date(startDate);
+    const lowerDuration = durationStr.toLowerCase();
+    if (lowerDuration.includes("3 month") || lowerDuration.includes("quarter")) {
+      endDate.setDate(endDate.getDate() + 90);
+    } else if (lowerDuration.includes("6 month")) {
+      endDate.setDate(endDate.getDate() + 180);
+    } else if (lowerDuration.includes("year") || lowerDuration.includes("12 month")) {
+      endDate.setDate(endDate.getDate() + 365);
+    } else if (lowerDuration.includes("week")) {
+      const weeks = parseInt(durationStr) || 4;
+      endDate.setDate(endDate.getDate() + weeks * 7);
+    } else {
+      endDate.setDate(endDate.getDate() + 30);
+    }
+
+    const diffMs = endDate.getTime() - new Date().getTime();
+    const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+
+    activeCoaching = {
+      trainerId: latestPaidPayment.trainer.id,
+      trainerName: latestPaidPayment.trainer.user.name,
+      trainerEmail: latestPaidPayment.trainer.user.email,
+      trainerSpecialty: latestPaidPayment.trainer.specialty || "Certified Personal Trainer",
+      trainerBio: latestPaidPayment.trainer.bio,
+      trainerAvatarUrl: latestPaidPayment.trainer.avatarUrl,
+      trainerRating: latestPaidPayment.trainer.rating || 4.9,
+      trainerExperience: latestPaidPayment.trainer.experience || 6,
+      packageName: latestPaidPayment.package?.name || matchingReq?.package?.name || "1-on-1 Monthly Coaching",
+      packageDuration: durationStr,
+      packagePrice: (latestPaidPayment.amount || 99900) / 100,
+      packageBenefits: latestPaidPayment.package?.benefits || [
+        "Customized Workout Split",
+        "Targeted Calorie & Macro Goals",
+        "Direct Text & Audio Chat",
+        "Weekly Check-in & Reviews",
+      ],
+      startDate,
+      endDate,
+      daysRemaining,
+      goal: matchingReq?.goal || activeProgramWithCoach?.goal || "1-on-1 Physique & Strength Transformation",
+      coachingRequestId: matchingReq?.id || latestPaidPayment.coachingRequestId || undefined,
+      paymentId: latestPaidPayment.id,
+      isPaid: true,
+      statusBadgeText: "✓ Active Coaching (Paid)",
+    };
+  } else if (acceptedRequest && acceptedRequest.trainer?.user) {
+    const startDate = acceptedRequest.startDate
+      ? new Date(acceptedRequest.startDate)
+      : acceptedRequest.createdAt
+      ? new Date(acceptedRequest.createdAt)
+      : new Date();
+    const durationStr = acceptedRequest.package?.duration || "1 Month";
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + (durationStr.includes("3") ? 90 : 30));
+    const diffMs = endDate.getTime() - new Date().getTime();
+    const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+
+    activeCoaching = {
+      trainerId: acceptedRequest.trainer.id,
+      trainerName: acceptedRequest.trainer.user.name,
+      trainerEmail: acceptedRequest.trainer.user.email,
+      trainerSpecialty: acceptedRequest.trainer.specialty || "Certified Personal Trainer",
+      trainerBio: acceptedRequest.trainer.bio,
+      trainerAvatarUrl: acceptedRequest.trainer.avatarUrl,
+      trainerRating: acceptedRequest.trainer.rating || 4.9,
+      trainerExperience: acceptedRequest.trainer.experience || 6,
+      packageName: acceptedRequest.package?.name || "1-on-1 Monthly Coaching",
+      packageDuration: durationStr,
+      packagePrice: acceptedRequest.package?.price || acceptedRequest.trainer.price || 999,
+      packageBenefits: acceptedRequest.package?.benefits || [
+        "Customized Workout Split",
+        "Targeted Calorie & Macro Goals",
+        "Direct Text & Audio Chat",
+        "Weekly Check-in & Reviews",
+      ],
+      startDate,
+      endDate,
+      daysRemaining,
+      goal: acceptedRequest.goal,
+      coachingRequestId: acceptedRequest.id,
+      isPaid: isAcceptedPaid,
+      statusBadgeText: isAcceptedPaid ? "✓ Active Coaching (Paid)" : "✓ Active 1-on-1 Coaching",
+    };
+  } else if (activeProgramWithCoach && activeProgramWithCoach.trainer?.user) {
+    const startDate = activeProgramWithCoach.startDate
+      ? new Date(activeProgramWithCoach.startDate)
+      : activeProgramWithCoach.createdAt
+      ? new Date(activeProgramWithCoach.createdAt)
+      : new Date();
+    const endDate = activeProgramWithCoach.endDate
+      ? new Date(activeProgramWithCoach.endDate)
+      : new Date(startDate.getTime() + (activeProgramWithCoach.durationWeeks || 4) * 7 * 24 * 60 * 60 * 1000);
+    const diffMs = endDate.getTime() - new Date().getTime();
+    const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+
+    activeCoaching = {
+      trainerId: activeProgramWithCoach.trainer.id,
+      trainerName: activeProgramWithCoach.trainer.user.name,
+      trainerEmail: activeProgramWithCoach.trainer.user.email,
+      trainerSpecialty: activeProgramWithCoach.trainer.specialty || "Certified Personal Trainer",
+      trainerBio: activeProgramWithCoach.trainer.bio,
+      trainerAvatarUrl: activeProgramWithCoach.trainer.avatarUrl,
+      trainerRating: activeProgramWithCoach.trainer.rating || 4.9,
+      trainerExperience: activeProgramWithCoach.trainer.experience || 6,
+      packageName: activeProgramWithCoach.name || "Custom Periodized Split",
+      packageDuration: `${activeProgramWithCoach.durationWeeks || 4} Weeks`,
+      packagePrice: activeProgramWithCoach.trainer.price || 999,
+      packageBenefits: [
+        "Customized Workout Split",
+        "Prescribed Exercises & Sets/Reps",
+        "Progression Tracking",
+      ],
+      startDate,
+      endDate,
+      daysRemaining,
+      goal: activeProgramWithCoach.goal || "Hypertrophy & Strength",
+      isPaid: true,
+      statusBadgeText: "✓ Active Programming",
+    };
+  }
+
+  // Pending payment request: Coach accepted request, awaiting client payment checkout (only if no other active coaching)
+  const pendingPaymentRequest = !activeCoaching && acceptedRequest && !isAcceptedPaid ? acceptedRequest : null;
+
+  // Pending review request: Sent by client, awaiting coach decision
+  const pendingReviewRequest = !activeCoaching && !pendingPaymentRequest ? sentRequests.find((r) => r.status === "PENDING") : null;
 
   return (
     <main className="min-h-screen bg-[#080B0F] text-white">
@@ -295,80 +460,171 @@ export default async function ClientDashboardPage() {
               </div>
             )}
 
-            {/* Active Coaching / My Trainer */}
+            {/* Active Coaching / My Trainer Card */}
             <div className="rounded-[32px] border border-white/10 bg-[#11161D] p-8 shadow-[0_20px_50px_rgba(0,0,0,0.4)]">
               <div className="flex items-center justify-between border-b border-white/10 pb-5">
                 <div>
                   <h2 className="text-2xl font-bold text-white">My Active Coaching</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">Current coach and programming status</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Current coach, enrolled package, and programming status</p>
                 </div>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider ${
-                    activePaidRequest
-                      ? "bg-green-500/15 text-green-400 border border-green-500/30"
-                      : pendingPaymentRequest
-                      ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
-                      : pendingReviewRequest
-                      ? "bg-yellow-500/15 text-yellow-400 border border-yellow-500/30"
-                      : "bg-white/5 text-gray-400 border border-white/10"
-                  }`}
-                >
-                  {activePaidRequest
-                    ? "✓ Active Coaching (Paid)"
-                    : pendingPaymentRequest
-                    ? "Payment Required to Activate"
-                    : pendingReviewRequest
-                    ? "Pending Coach Response"
-                    : "No Active Coach"}
-                </span>
+                {activeCoaching ? (
+                  <div className="flex items-center gap-2 rounded-full border border-green-500/30 bg-green-500/10 px-3.5 py-1 text-xs font-black text-green-400">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                    </span>
+                    <span>{activeCoaching.statusBadgeText}</span>
+                  </div>
+                ) : pendingPaymentRequest ? (
+                  <span className="rounded-full border border-amber-500/30 bg-amber-500/15 px-3 py-1 text-xs font-bold uppercase tracking-wider text-amber-400">
+                    Payment Required to Activate
+                  </span>
+                ) : pendingReviewRequest ? (
+                  <span className="rounded-full border border-yellow-500/30 bg-yellow-500/15 px-3 py-1 text-xs font-bold uppercase tracking-wider text-yellow-400">
+                    Pending Coach Response
+                  </span>
+                ) : (
+                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold uppercase tracking-wider text-gray-400">
+                    No Active Coach
+                  </span>
+                )}
               </div>
 
-              {activePaidRequest ? (
-                <div className="mt-6 flex flex-col gap-6 rounded-2xl border border-[#7CFF3B]/30 bg-[#7CFF3B]/5 p-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#7CFF3B] to-[#244613] text-2xl font-black text-black">
-                        {activePaidRequest.trainer.user.name[0]}
-                      </div>
+              {activeCoaching ? (
+                <div className="mt-6 flex flex-col gap-6 rounded-2xl border border-[#7CFF3B]/30 bg-gradient-to-br from-[#7CFF3B]/10 via-transparent to-[#7CFF3B]/5 p-6 shadow-[0_0_30px_rgba(124,255,59,0.05)]">
+                  {/* Coach Profile & Package Hero */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+                    <div className="flex items-start sm:items-center gap-4">
+                      {activeCoaching.trainerAvatarUrl ? (
+                        <img
+                          src={activeCoaching.trainerAvatarUrl}
+                          alt={activeCoaching.trainerName}
+                          className="h-16 w-16 rounded-2xl object-cover border-2 border-[#7CFF3B]/50 shadow-md"
+                        />
+                      ) : (
+                        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#7CFF3B] to-[#244613] text-2xl font-black text-black shadow-md">
+                          {activeCoaching.trainerName[0]}
+                        </div>
+                      )}
                       <div>
-                        <h3 className="text-xl font-bold text-white">
-                          {activePaidRequest.trainer.user.name}
-                        </h3>
-                        <p className="text-xs text-[#7CFF3B] font-semibold">
-                          {activePaidRequest.trainer.specialty || "Certified Personal Trainer"}
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-xl font-bold text-white">
+                            {activeCoaching.trainerName}
+                          </h3>
+                          <span className="rounded-full bg-[#7CFF3B]/20 border border-[#7CFF3B]/40 px-2 py-0.5 text-[10px] font-black text-[#7CFF3B]">
+                            ✓ Verified Coach
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#7CFF3B] font-semibold mt-0.5">
+                          {activeCoaching.trainerSpecialty} • {activeCoaching.trainerExperience} yrs exp • ⭐ {activeCoaching.trainerRating}
                         </p>
-                        <p className="text-xs text-gray-300 mt-1">
-                          Enrolled Package: <span className="text-white font-bold">{activePaidRequest.package?.name || "1-on-1 Monthly Coaching"}</span> ({activePaidRequest.package?.duration || "1 Month"})
+                        <p className="text-xs text-gray-300 mt-1.5">
+                          Enrolled Plan: <span className="text-white font-bold">{activeCoaching.packageName}</span> (₹{activeCoaching.packagePrice.toLocaleString("en-IN")} / {activeCoaching.packageDuration})
                         </p>
                       </div>
                     </div>
 
-                    <div className="text-right">
-                      <span className="text-xs text-gray-400">Coaching Status</span>
-                      <p className="text-sm font-bold text-[#7CFF3B]">Active 1-on-1 (Paid)</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">
-                        Started {new Date(activePaidRequest.startDate).toLocaleDateString()}
+                    <div className="sm:text-right bg-black/30 border border-white/5 rounded-xl p-3 sm:bg-transparent sm:border-0 sm:p-0">
+                      <span className="text-[11px] uppercase tracking-wider text-gray-400 font-bold">Billing / Cycle</span>
+                      <p className="text-sm font-black text-[#7CFF3B]">
+                        {activeCoaching.daysRemaining > 0 ? `${activeCoaching.daysRemaining} Days Remaining` : "Renewal Due"}
+                      </p>
+                      <p className="text-[10px] text-gray-300 mt-0.5">
+                        Started {activeCoaching.startDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} • Valid until {activeCoaching.endDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                       </p>
                     </div>
                   </div>
 
+                  {/* Active Goal */}
+                  <div className="rounded-xl border border-white/10 bg-black/40 p-3.5 text-xs text-gray-300">
+                    <span className="font-bold text-[#7CFF3B] uppercase tracking-wider text-[10px] block mb-1">
+                      🎯 Primary Coaching Goal
+                    </span>
+                    <span className="font-medium text-white text-sm">{activeCoaching.goal}</span>
+                  </div>
+
+                  {/* Programming Highlights Snapshots */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <Link
+                      href="/workouts"
+                      className="rounded-xl border border-white/10 bg-white/5 p-3.5 transition hover:border-[#7CFF3B]/50 hover:bg-white/[0.08]"
+                    >
+                      <div className="text-xs text-gray-400 font-bold">🏋️ Workouts</div>
+                      <div className="text-sm font-bold text-white mt-1 truncate">
+                        {activeWorkoutProgram ? activeWorkoutProgram.name : "Custom Periodization"}
+                      </div>
+                      <div className="text-[11px] text-[#7CFF3B] mt-0.5">
+                        {activeWorkoutProgram ? `${activeWorkoutProgram.workoutDays.length} training days/week` : "Ready to view →"}
+                      </div>
+                    </Link>
+
+                    <Link
+                      href="/nutrition"
+                      className="rounded-xl border border-white/10 bg-white/5 p-3.5 transition hover:border-[#7CFF3B]/50 hover:bg-white/[0.08]"
+                    >
+                      <div className="text-xs text-gray-400 font-bold">🥗 Nutrition & Macros</div>
+                      <div className="text-sm font-bold text-white mt-1 truncate">
+                        {activeNutritionPlan ? `${activeNutritionPlan.dailyCalories} kcal / day` : "Prescribed Targets"}
+                      </div>
+                      <div className="text-[11px] text-[#7CFF3B] mt-0.5">
+                        {activeNutritionPlan ? `${todayCalories} kcal consumed today` : "Open nutrition →"}
+                      </div>
+                    </Link>
+
+                    <Link
+                      href="/sessions"
+                      className="rounded-xl border border-white/10 bg-white/5 p-3.5 transition hover:border-[#7CFF3B]/50 hover:bg-white/[0.08]"
+                    >
+                      <div className="text-xs text-gray-400 font-bold">📹 1-on-1 Video</div>
+                      <div className="text-sm font-bold text-white mt-1 truncate">
+                        {clientSessions.filter((s) => s.status === "SCHEDULED" || s.status === "LIVE").length > 0
+                          ? `${clientSessions.filter((s) => s.status === "SCHEDULED" || s.status === "LIVE").length} Session(s) Scheduled`
+                          : "Live Coaching"}
+                      </div>
+                      <div className="text-[11px] text-[#7CFF3B] mt-0.5">
+                        {clientSessions.filter((s) => s.status === "SCHEDULED" || s.status === "LIVE").length > 0
+                          ? "View upcoming calls →"
+                          : "Schedule call →"}
+                      </div>
+                    </Link>
+                  </div>
+
+                  {/* Action Bar */}
                   <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#7CFF3B]/20 pt-4">
-                    <div className="text-xs text-gray-300">
-                      Primary Target: <span className="font-semibold text-white">{activePaidRequest.goal}</span>
+                    <div className="text-xs text-gray-400">
+                      Package: <span className="font-semibold text-white">{activeCoaching.packageName}</span> • Status: <span className="text-[#7CFF3B] font-bold">Active</span>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Link
-                        href={`/messages?trainerId=${activePaidRequest.trainer.id}`}
-                        className="rounded-xl bg-[#7CFF3B] px-5 py-2 text-xs font-bold text-black transition hover:scale-105"
+                        href={`/messages?trainerId=${activeCoaching.trainerId}`}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-[#7CFF3B] px-5 py-2.5 text-xs font-black text-black shadow-[0_0_15px_rgba(124,255,59,0.3)] transition hover:scale-105 hover:bg-[#68e326]"
                       >
-                        Open Chat Channel →
+                        <span>💬 Message Coach</span>
+                      </Link>
+                      <Link
+                        href="/workouts"
+                        className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-bold text-white transition hover:border-[#7CFF3B] hover:text-[#7CFF3B]"
+                      >
+                        Workouts
+                      </Link>
+                      <Link
+                        href="/nutrition"
+                        className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-bold text-white transition hover:border-[#7CFF3B] hover:text-[#7CFF3B]"
+                      >
+                        Nutrition
                       </Link>
                       <Link
                         href="/sessions"
-                        className="rounded-xl border border-white/10 bg-white/5 px-5 py-2 text-xs font-semibold text-white hover:border-[#7CFF3B]"
+                        className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-bold text-white transition hover:border-[#7CFF3B] hover:text-[#7CFF3B]"
                       >
-                        Video Sessions
+                        Sessions
                       </Link>
+                      <a
+                        href="#payments-history"
+                        className="rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-xs font-semibold text-gray-300 transition hover:text-white hover:border-white/30"
+                      >
+                        Invoices
+                      </a>
                     </div>
                   </div>
                 </div>
@@ -576,7 +832,7 @@ export default async function ClientDashboardPage() {
             </div>
 
             {/* Payment History & Invoices Section */}
-            <div className="rounded-[32px] border border-white/10 bg-[#11161D] p-8 shadow-md">
+            <div id="payments-history" className="rounded-[32px] border border-white/10 bg-[#11161D] p-8 shadow-md">
               <div className="border-b border-white/10 pb-4 mb-6 flex items-center justify-between">
                 <div>
                   <h3 className="text-xl font-bold text-white">Payment History & Invoices</h3>

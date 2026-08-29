@@ -100,12 +100,43 @@ export async function POST(req: NextRequest) {
       `[Payment Success] Order ${razorpay_order_id} verified successfully. Amount: ₹${updatedPayment.amount / 100} (${updatedPayment.package?.name || "Package"}). Status updated to PAID.`
     );
 
-    // 5. Connect / activate coaching relationship if coachingRequestId is linked
+    // 5. Connect / activate coaching relationship
     if (existingPayment.coachingRequestId) {
       await prisma.coachingRequest.update({
         where: { id: existingPayment.coachingRequestId },
         data: { status: "ACCEPTED" },
       });
+    } else {
+      // Direct package purchase: find existing request or create an active ACCEPTED coaching request
+      const existingReq = await prisma.coachingRequest.findFirst({
+        where: {
+          clientId: existingPayment.clientId,
+          trainerId: existingPayment.trainerId,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      if (existingReq) {
+        await prisma.coachingRequest.update({
+          where: { id: existingReq.id },
+          data: {
+            status: "ACCEPTED",
+            packageId: existingPayment.packageId || existingReq.packageId,
+          },
+        });
+      } else {
+        await prisma.coachingRequest.create({
+          data: {
+            clientId: existingPayment.clientId,
+            trainerId: existingPayment.trainerId,
+            packageId: existingPayment.packageId,
+            goal: "1-on-1 Personalized Coaching",
+            message: `Direct package purchase: ${existingPayment.package?.name || "1-on-1 Coaching"}`,
+            status: "ACCEPTED",
+            startDate: new Date(),
+          },
+        });
+      }
     }
 
     // 6. Ensure Conversation exists between Client and Trainer for chat access

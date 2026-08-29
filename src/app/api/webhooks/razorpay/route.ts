@@ -49,7 +49,52 @@ export async function POST(req: NextRequest) {
               where: { id: existing.coachingRequestId },
               data: { status: "ACCEPTED" },
             });
+          } else {
+            const existingReq = await prisma.coachingRequest.findFirst({
+              where: {
+                clientId: existing.clientId,
+                trainerId: existing.trainerId,
+              },
+              orderBy: { createdAt: "desc" },
+            });
+
+            if (existingReq) {
+              await prisma.coachingRequest.update({
+                where: { id: existingReq.id },
+                data: {
+                  status: "ACCEPTED",
+                  packageId: existing.packageId || existingReq.packageId,
+                },
+              });
+            } else {
+              await prisma.coachingRequest.create({
+                data: {
+                  clientId: existing.clientId,
+                  trainerId: existing.trainerId,
+                  packageId: existing.packageId,
+                  goal: "1-on-1 Personalized Coaching",
+                  message: "Direct package purchase",
+                  status: "ACCEPTED",
+                  startDate: new Date(),
+                },
+              });
+            }
           }
+
+          // Ensure conversation exists between client and trainer
+          await prisma.conversation.upsert({
+            where: {
+              clientId_trainerId: {
+                clientId: existing.clientId,
+                trainerId: existing.trainerId,
+              },
+            },
+            update: {},
+            create: {
+              clientId: existing.clientId,
+              trainerId: existing.trainerId,
+            },
+          });
         }
       }
     } else if (eventType === "payment.failed") {
