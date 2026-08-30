@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (profile.status !== "ACTIVE" || !profile.verified) {
+    if ((profile.status !== "ACTIVE" && profile.status !== "PENDING") || !profile.isPublic) {
       return NextResponse.json(
         { error: "This coach is currently not accepting new client applications." },
         { status: 400 }

@@ -157,6 +157,12 @@ export default async function TrainerDashboardPage() {
   const pendingRequests = incomingRequests.filter((r) => r.status === "PENDING");
   const acceptedClients = incomingRequests.filter((r) => r.status === "ACCEPTED");
 
+  const rejectionTag = user.trainerProfile?.tags.find((t) => t.startsWith("rejection_reason:"));
+  const rejectionReason = rejectionTag ? rejectionTag.replace("rejection_reason:", "") : null;
+  const isVerified = Boolean(user.trainerProfile?.verified && user.trainerProfile?.status === "ACTIVE");
+  const isNeedsChanges = Boolean(user.trainerProfile?.status === "INACTIVE" || rejectionReason);
+  const isPending = Boolean(!isVerified && !isNeedsChanges && user.trainerProfile?.status === "PENDING");
+
   return (
     <main className="min-h-screen bg-[#080B0F] text-white">
       <Navbar />
@@ -169,8 +175,20 @@ export default async function TrainerDashboardPage() {
               <span className="rounded-full bg-[#7CFF3B]/10 border border-[#7CFF3B]/30 px-3.5 py-1 text-xs font-bold text-[#7CFF3B] uppercase tracking-wider">
                 Coach Management Portal
               </span>
-              <span className="rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs text-gray-300">
-                {user.trainerProfile?.verified ? "✓ Verified Coach" : "Under Review"}
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-bold ${
+                  isVerified
+                    ? "bg-[#7CFF3B]/10 border border-[#7CFF3B]/30 text-[#7CFF3B]"
+                    : isNeedsChanges
+                    ? "bg-rose-500/10 border border-rose-500/30 text-rose-400"
+                    : "bg-yellow-500/10 border border-yellow-500/30 text-yellow-400"
+                }`}
+              >
+                {isVerified
+                  ? "✓ Verified Trainer"
+                  : isNeedsChanges
+                  ? "⚠️ Verification Needs Changes"
+                  : "⏳ Verification Pending"}
               </span>
             </div>
             <h1 className="mt-3 text-4xl font-black text-white md:text-5xl">
@@ -182,6 +200,12 @@ export default async function TrainerDashboardPage() {
           </div>
 
           <div className="flex flex-wrap gap-3">
+            <Link
+              href="/trainer/onboarding"
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-[#11161D] px-5 py-3 text-xs font-bold text-gray-200 transition hover:border-[#7CFF3B] hover:text-white"
+            >
+              <span>⚙️ Edit Profile</span>
+            </Link>
             <Link
               href="/trainer/programs"
               className="inline-flex items-center gap-2 rounded-2xl bg-[#7CFF3B] px-5 py-3 text-xs font-black text-black shadow-[0_0_20px_rgba(124,255,59,0.3)] transition hover:scale-105 hover:bg-[#68e326]"
@@ -217,13 +241,59 @@ export default async function TrainerDashboardPage() {
               Packages ({packages.length})
             </Link>
             <Link
-              href={`/trainers`}
+              href={user.trainerProfile ? `/trainers/${user.id}` : "/trainers"}
+              target="_blank"
               className="rounded-2xl border border-white/10 bg-[#11161D] px-5 py-3 text-xs font-bold text-gray-300 transition hover:text-white"
             >
-              Directory
+              Public Profile ↗
             </Link>
           </div>
         </div>
+
+        {/* Dynamic Verification Status Banners */}
+        {isNeedsChanges && (
+          <div className="mt-8 rounded-3xl border border-rose-500/40 bg-rose-500/10 p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="flex items-start gap-4">
+              <span className="text-3xl shrink-0">⚠️</span>
+              <div>
+                <h3 className="text-lg font-bold text-white">Verification Needs Changes</h3>
+                <p className="mt-1 text-sm text-rose-200">
+                  <strong className="text-white">Admin Feedback:</strong>{" "}
+                  {rejectionReason || "Please update your professional credentials and coaching methodology."}
+                </p>
+                <p className="mt-1 text-xs text-rose-300">
+                  Your profile is temporarily hidden until you update and resubmit.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/trainer/onboarding"
+              className="rounded-2xl bg-rose-500 px-6 py-3 text-xs font-bold text-white shadow-[0_0_20px_rgba(244,63,94,0.3)] transition hover:bg-rose-600 shrink-0 text-center"
+            >
+              Update Profile & Resubmit →
+            </Link>
+          </div>
+        )}
+
+        {isPending && (
+          <div className="mt-8 rounded-3xl border border-yellow-500/30 bg-yellow-500/10 p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl shrink-0">⏳</span>
+              <div>
+                <h3 className="text-base font-bold text-white">Verification Under Review</h3>
+                <p className="mt-1 text-xs text-yellow-200">
+                  Your coaching profile has been submitted and is currently live on the marketplace as <strong>"Verification Pending"</strong>. TCB-3 administrators are reviewing your credentials.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/trainer/onboarding"
+              className="rounded-2xl border border-yellow-500/30 bg-yellow-500/20 px-5 py-2.5 text-xs font-bold text-yellow-300 hover:bg-yellow-500/30 shrink-0 text-center"
+            >
+              Review / Edit Profile
+            </Link>
+          </div>
+        )}
 
         {/* Top Metric Cards */}
         <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">

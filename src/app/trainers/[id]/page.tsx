@@ -152,7 +152,7 @@ export default async function TrainerProfilePage({
                           : "bg-yellow-500/10 border border-yellow-500/30 text-yellow-400"
                       }`}
                     >
-                      {trainer.verified ? "✓ Verified Specialist" : "Under Review"}
+                      {trainer.verified ? "✓ Verified Specialist" : "⏳ Verification Pending"}
                     </span>
                   </div>
 
@@ -184,6 +184,15 @@ export default async function TrainerProfilePage({
                       </span>
                     ))}
                   </div>
+
+                  {!trainer.verified && (
+                    <div className="mt-6 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-xs md:text-sm text-yellow-200 flex items-start gap-3">
+                      <span className="text-xl shrink-0">⏳</span>
+                      <div>
+                        <strong className="text-white font-semibold">Verification in Progress:</strong> This coach's professional credentials are currently undergoing review by TCB-3 administrators. You can still message the coach and enroll in coaching packages.
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

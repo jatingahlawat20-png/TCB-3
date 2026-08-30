@@ -42,7 +42,7 @@ export function TrainerCard({ trainer }: { trainer: Trainer }) {
                 : "text-yellow-400 border border-yellow-400/40"
             }`}
           >
-            {trainer.verified ? "✓ Verified Coach" : "Under Review"}
+            {trainer.verified ? "✓ Verified Coach" : "⏳ Verification Pending"}
           </div>
         </Link>
 

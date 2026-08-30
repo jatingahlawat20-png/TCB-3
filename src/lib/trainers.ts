@@ -12,9 +12,11 @@ export async function getAllTrainers(options?: TrainerFilterOptions): Promise<Tr
   try {
     const dbProfiles = await prisma.trainerProfile.findMany({
       where: {
-        status: "ACTIVE",
-        verified: true,
         isPublic: true,
+        OR: [
+          { status: "ACTIVE" },
+          { status: "PENDING" },
+        ],
       },
       include: {
         user: true,
@@ -23,7 +25,10 @@ export async function getAllTrainers(options?: TrainerFilterOptions): Promise<Tr
           orderBy: { price: "asc" },
         },
       },
-      orderBy: { user: { createdAt: "asc" } },
+      orderBy: [
+        { verified: "desc" },
+        { user: { createdAt: "asc" } },
+      ],
     });
 
     if (dbProfiles.length === 0) {
@@ -134,7 +139,9 @@ export async function getTrainerById(
           { user: { id: normalizedId } },
           { user: { name: { equals: decodeURIComponent(normalizedId), mode: "insensitive" } } },
         ],
-        ...(allowUnverified ? {} : { status: "ACTIVE", verified: true }),
+        ...(allowUnverified
+          ? {}
+          : { isPublic: true, status: { in: ["ACTIVE", "PENDING"] } }),
       },
       include: {
         user: true,

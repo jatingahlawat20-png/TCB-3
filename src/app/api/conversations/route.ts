@@ -159,7 +159,7 @@ export async function POST(request: Request) {
         );
       }
 
-      if (profile.status !== "ACTIVE" || !profile.verified) {
+      if ((profile.status !== "ACTIVE" && profile.status !== "PENDING") || !profile.isPublic) {
         return NextResponse.json(
           { error: "This coach is not currently active for new messages." },
           { status: 400 }

@@ -13,15 +13,24 @@ export default async function AdminDashboardPage() {
   let totalTrainers = 0;
   let totalClients = 0;
   let totalRequests = 0;
+  let pendingTrainersCount = 0;
   let recentUsers: any[] = [];
 
   try {
-    [totalUsers, totalTrainers, totalClients, totalRequests] =
+    [totalUsers, totalTrainers, totalClients, totalRequests, pendingTrainersCount] =
       await Promise.all([
         prisma.user.count(),
         prisma.user.count({ where: { role: "TRAINER" } }),
         prisma.user.count({ where: { role: "CLIENT" } }),
         prisma.coachingRequest.count().catch(() => 0),
+        prisma.trainerProfile.count({
+          where: {
+            OR: [
+              { status: "PENDING" },
+              { verified: false, status: { not: "INACTIVE" } },
+            ],
+          },
+        }).catch(() => 0),
       ]);
 
     recentUsers = await prisma.user.findMany({
@@ -55,6 +64,20 @@ export default async function AdminDashboardPage() {
             <p className="mt-2 text-sm text-gray-400">
               Authenticated Admin: <span className="font-semibold text-white">{user.name}</span> ({user.email})
             </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/admin/trainers"
+              className="inline-flex items-center gap-2 rounded-2xl bg-[#7CFF3B] px-6 py-3.5 text-xs font-black text-black shadow-[0_0_25px_rgba(124,255,59,0.3)] transition hover:scale-105 hover:bg-[#68e326]"
+            >
+              <span>📋 Trainer Verification Portal</span>
+              {pendingTrainersCount > 0 && (
+                <span className="rounded-full bg-black px-2 py-0.5 text-[10px] font-black text-[#7CFF3B]">
+                  {pendingTrainersCount} Pending
+                </span>
+              )}
+            </Link>
           </div>
         </div>
 

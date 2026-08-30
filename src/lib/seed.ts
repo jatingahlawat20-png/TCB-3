@@ -87,17 +87,17 @@ export async function seedTrainersIfEmpty() {
       }
     }
 
-    // Set any non-official/placeholder/demo trainer accounts to PENDING and unverified
-    // (preserves database records and foreign keys without leaking to the public marketplace)
+    // Ensure all official trainer IDs are verified and active
     await prisma.trainerProfile.updateMany({
       where: {
         userId: {
-          notIn: officialTrainerUserIds,
+          in: officialTrainerUserIds,
         },
       },
       data: {
-        status: "PENDING",
-        verified: false,
+        status: "ACTIVE",
+        verified: true,
+        isPublic: true,
       },
     });
 
