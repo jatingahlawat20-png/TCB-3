@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { evaluateTrainerEligibility, checkAndActivateTrainer } from "@/lib/trainer-eligibility";
+import { evaluateCoachEligibility, checkAndActivateTrainer } from "@/lib/trainer-eligibility";
 
 export async function GET() {
   try {
@@ -29,7 +29,7 @@ export async function GET() {
     });
 
     const eligibility = profile
-      ? evaluateTrainerEligibility({
+      ? evaluateCoachEligibility({
           name: profile.user.name,
           specialty: profile.specialty,
           bio: profile.bio,
@@ -38,13 +38,15 @@ export async function GET() {
           tags: profile.tags,
           packages: profile.packages,
         })
-      : { isEligible: false, missingRequirements: ["Trainer profile has not been created yet."] };
+      : { eligible: false, isEligible: false, missingRequirements: ["Trainer profile has not been created yet."], profileCompleteness: 0 };
 
     return NextResponse.json({
       success: true,
       profile,
+      eligible: eligibility.eligible,
       isEligible: eligibility.isEligible,
       missingRequirements: eligibility.missingRequirements,
+      profileCompleteness: eligibility.profileCompleteness,
     });
   } catch (error: any) {
     console.error("Error fetching trainer profile:", error);
@@ -71,8 +73,10 @@ export async function POST(req: NextRequest) {
       bio,
       tags,
       avatarUrl,
+      packages: incomingPackages,
     } = body;
 
+    // Update user display name if provided
     if (name && typeof name === "string" && name.trim().length > 0) {
       await prisma.user.update({
         where: { id: user.id },
@@ -118,8 +122,42 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 2. Ensure standard coaching packages exist if rate is valid
-    if (parsedPrice && parsedPrice > 0) {
+    // 2. Process custom packages if supplied in body
+    if (Array.isArray(incomingPackages) && incomingPackages.length > 0) {
+      for (const pkg of incomingPackages) {
+        const pkgPrice = typeof pkg.price === "number" ? pkg.price : parseFloat(String(pkg.price || "0"));
+        if (!pkg.name || isNaN(pkgPrice) || pkgPrice <= 0) continue;
+
+        if (pkg.id && !pkg.id.startsWith("temp_")) {
+          // Update existing package
+          await prisma.coachingPackage.updateMany({
+            where: { id: pkg.id, trainerId: trainerProfile.id },
+            data: {
+              name: String(pkg.name).trim(),
+              description: String(pkg.description || "").trim(),
+              duration: String(pkg.duration || "1 Month").trim(),
+              price: pkgPrice,
+              benefits: Array.isArray(pkg.benefits) ? pkg.benefits : [],
+              active: pkg.active ?? true,
+            },
+          });
+        } else {
+          // Create new package
+          await prisma.coachingPackage.create({
+            data: {
+              trainerId: trainerProfile.id,
+              name: String(pkg.name).trim(),
+              description: String(pkg.description || "").trim(),
+              duration: String(pkg.duration || "1 Month").trim(),
+              price: pkgPrice,
+              benefits: Array.isArray(pkg.benefits) ? pkg.benefits : ["Personalized coaching", "Direct chat"],
+              active: pkg.active ?? true,
+            },
+          });
+        }
+      }
+    } else if (parsedPrice && parsedPrice > 0) {
+      // If no custom package array, ensure default packages exist or update price
       if (trainerProfile.packages.length === 0) {
         const displayName = (name && name.trim()) || user.name;
         await prisma.coachingPackage.createMany({
@@ -188,11 +226,13 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      eligible: activationResult.eligible,
       isEligible: activationResult.isEligible,
       missingRequirements: activationResult.missingRequirements,
+      profileCompleteness: activationResult.profileCompleteness,
       profile: activationResult.profile,
-      message: activationResult.isEligible
-        ? "Trainer profile is complete and has been automatically activated in the public marketplace!"
+      message: activationResult.eligible
+        ? "Trainer profile is complete and has been automatically verified and activated in the public marketplace!"
         : "Profile saved. Complete all mandatory requirements to become active and visible in the marketplace.",
     });
   } catch (error: any) {

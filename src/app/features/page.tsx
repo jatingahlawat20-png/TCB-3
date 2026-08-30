@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/landing/v2/navbar/navbar";
@@ -8,6 +8,22 @@ import { Footer } from "@/components/landing/v2/footer/footer";
 
 export default function FeaturesPage() {
   const [activeTab, setActiveTab] = useState(0);
+  const [user, setUser] = useState<{ id: string; name: string; role: string } | null>(null);
+
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data.user || null);
+        }
+      } catch {
+        setUser(null);
+      }
+    }
+    checkAuth();
+  }, []);
 
   const pillars = [
     {
@@ -316,10 +332,24 @@ export default function FeaturesPage() {
               Explore Coach Directory →
             </Link>
             <Link
-              href="/get-started"
-              className="rounded-2xl border border-white/10 bg-white/5 px-8 py-4 font-bold text-white transition hover:border-[#7CFF3B]"
+              href={
+                !user
+                  ? "/get-started"
+                  : user.role === "TRAINER"
+                  ? "/trainer/dashboard"
+                  : user.role === "ADMIN"
+                  ? "/admin"
+                  : "/dashboard"
+              }
+              className="rounded-2xl border border-white/10 bg-white/5 px-8 py-4 font-bold text-white transition hover:border-[#7CFF3B] hover:text-[#7CFF3B]"
             >
-              Create Account
+              {!user
+                ? "Create Account"
+                : user.role === "TRAINER"
+                ? "Coach Dashboard →"
+                : user.role === "ADMIN"
+                ? "Admin Portal →"
+                : "Go to Dashboard →"}
             </Link>
           </div>
         </div>

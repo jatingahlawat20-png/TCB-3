@@ -133,7 +133,7 @@ export async function POST(request: Request) {
     });
 
     const redirectTo =
-      user.role === "TRAINER" ? "/trainer/dashboard" : "/dashboard";
+      user.role === "TRAINER" ? "/trainer/onboarding" : "/dashboard";
 
     const response = NextResponse.json(
       {

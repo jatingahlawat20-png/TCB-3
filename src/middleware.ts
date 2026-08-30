@@ -46,6 +46,11 @@ async function verifyToken(token: string) {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  const isAuthPage =
+    pathname === "/login" ||
+    pathname === "/get-started" ||
+    pathname === "/signup";
+
   const isClientDashboard = pathname.startsWith("/dashboard");
   const isTrainerDashboard = pathname.startsWith("/trainer");
   const isAdminDashboard = pathname.startsWith("/admin");
@@ -55,6 +60,7 @@ export async function middleware(request: NextRequest) {
   const isSessions = pathname.startsWith("/sessions");
 
   if (
+    !isAuthPage &&
     !isClientDashboard &&
     !isTrainerDashboard &&
     !isAdminDashboard &&
@@ -67,6 +73,23 @@ export async function middleware(request: NextRequest) {
   }
 
   const token = request.cookies.get("token")?.value;
+
+  // If already authenticated and visiting login/signup/get-started, redirect to dashboard
+  if (isAuthPage) {
+    if (token) {
+      const payload = await verifyToken(token);
+      if (payload) {
+        const dest =
+          payload.role === "TRAINER"
+            ? "/trainer/dashboard"
+            : payload.role === "ADMIN"
+            ? "/admin"
+            : "/dashboard";
+        return NextResponse.redirect(new URL(dest, request.url));
+      }
+    }
+    return NextResponse.next();
+  }
 
   if (!token) {
     const loginUrl = new URL("/login", request.url);
@@ -122,6 +145,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/login",
+    "/get-started",
+    "/signup",
     "/dashboard/:path*",
     "/trainer/:path*",
     "/admin/:path*",

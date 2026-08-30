@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -22,6 +22,30 @@ export default function GetStartedPage() {
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
 
+  // Redirect already authenticated users
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.user) {
+            const dest =
+              data.user.role === "TRAINER"
+                ? "/trainer/dashboard"
+                : data.user.role === "ADMIN"
+                ? "/admin"
+                : "/dashboard";
+            router.replace(dest);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    checkAuth();
+  }, [router]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -39,8 +63,12 @@ export default function GetStartedPage() {
         if (!res.ok) {
           throw new Error(data.error || "Failed to create account");
         }
-        const target = data.redirectTo || (role === "TRAINER" ? "/trainer/dashboard" : "/dashboard");
-        setSuccessMsg("Account created! Redirecting to your dashboard...");
+        const target = data.redirectTo || (role === "TRAINER" ? "/trainer/onboarding" : "/dashboard");
+        setSuccessMsg(
+          role === "TRAINER"
+            ? "Account created! Redirecting to coach onboarding..."
+            : "Account created! Redirecting to your dashboard..."
+        );
         setTimeout(() => {
           router.push(target);
           router.refresh();

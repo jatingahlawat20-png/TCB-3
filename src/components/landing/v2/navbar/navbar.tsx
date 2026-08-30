@@ -181,6 +181,55 @@ export function Navbar() {
                 )}
               </Link>
             </>
+          ) : user.role === "ADMIN" ? (
+            // LOGGED IN ADMIN NAV
+            <>
+              <Link
+                href="/"
+                className={`transition ${
+                  isActive("/") ? "font-bold text-[#7CFF3B]" : "text-gray-300 hover:text-[#7CFF3B]"
+                }`}
+              >
+                Home
+              </Link>
+              <Link
+                href="/trainers"
+                className={`transition ${
+                  isActive("/trainers") ? "font-bold text-[#7CFF3B]" : "text-gray-300 hover:text-[#7CFF3B]"
+                }`}
+              >
+                Trainers
+              </Link>
+              <Link
+                href="/admin"
+                className={`transition ${
+                  isActive("/admin") && pathname === "/admin" ? "font-bold text-[#7CFF3B]" : "text-gray-300 hover:text-[#7CFF3B]"
+                }`}
+              >
+                Admin Portal
+              </Link>
+              <Link
+                href="/admin/trainers"
+                className={`transition ${
+                  isActive("/admin/trainers") ? "font-bold text-[#7CFF3B]" : "text-gray-300 hover:text-[#7CFF3B]"
+                }`}
+              >
+                Coach Verifications
+              </Link>
+              <Link
+                href="/messages"
+                className={`inline-flex items-center transition ${
+                  isActive("/messages") ? "font-bold text-[#7CFF3B]" : "text-gray-300 hover:text-[#7CFF3B]"
+                }`}
+              >
+                <span>Messages</span>
+                {unreadCount > 0 && (
+                  <span className="ml-1.5 rounded-full bg-[#7CFF3B] px-1.5 py-0.2 text-[10px] font-black text-black animate-pulse">
+                    {unreadCount}
+                  </span>
+                )}
+              </Link>
+            </>
           ) : (
             // LOGGED IN TRAINER NAV
             <>
@@ -206,7 +255,7 @@ export function Navbar() {
                   isActive("/trainer/dashboard") ? "font-bold text-[#7CFF3B]" : "text-gray-300 hover:text-[#7CFF3B]"
                 }`}
               >
-                Dashboard
+                Coach Dashboard
               </Link>
               <Link
                 href="/trainer/programs"
@@ -252,13 +301,29 @@ export function Navbar() {
         {/* Action CTAs */}
         <div className="hidden items-center gap-3 md:flex">
           {!loading && user ? (
-            <div className="flex items-center gap-4">
-              <span className="text-xs text-gray-300 font-medium">
-                {user.name.split(" ")[0]} ({user.role === "TRAINER" ? "Coach" : "Client"})
+            <div className="flex items-center gap-3">
+              <Link
+                href={
+                  user.role === "ADMIN"
+                    ? "/admin"
+                    : user.role === "TRAINER"
+                    ? "/trainer/dashboard"
+                    : "/dashboard"
+                }
+                className="rounded-xl border border-[#7CFF3B]/30 bg-[#7CFF3B]/10 px-4 py-2 text-xs font-bold text-[#7CFF3B] transition hover:bg-[#7CFF3B]/20"
+              >
+                {user.role === "ADMIN"
+                  ? "Admin Dashboard"
+                  : user.role === "TRAINER"
+                  ? "Coach Dashboard"
+                  : "Dashboard"}
+              </Link>
+              <span className="text-xs text-gray-400 font-medium">
+                {user.name.split(" ")[0]}
               </span>
               <button
                 onClick={handleLogout}
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-gray-300 transition hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400"
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-gray-300 transition hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400"
               >
                 Logout
               </button>
@@ -351,11 +416,21 @@ export function Navbar() {
             ) : (
               <>
                 <Link
-                  href={user.role === "TRAINER" ? "/trainer/dashboard" : "/dashboard"}
+                  href={
+                    user.role === "ADMIN"
+                      ? "/admin"
+                      : user.role === "TRAINER"
+                      ? "/trainer/dashboard"
+                      : "/dashboard"
+                  }
                   onClick={() => setMobileMenuOpen(false)}
                   className="font-bold text-[#7CFF3B]"
                 >
-                  Dashboard
+                  {user.role === "ADMIN"
+                    ? "Admin Portal"
+                    : user.role === "TRAINER"
+                    ? "Coach Dashboard"
+                    : "Dashboard"}
                 </Link>
                 {user.role === "CLIENT" ? (
                   <>
@@ -373,30 +448,45 @@ export function Navbar() {
                     >
                       Nutrition
                     </Link>
+                    <Link
+                      href="/sessions"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="text-gray-300"
+                    >
+                      Video Sessions
+                    </Link>
+                  </>
+                ) : user.role === "TRAINER" ? (
+                  <>
+                    <Link
+                      href="/trainer/programs"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="text-gray-300"
+                    >
+                      Programs
+                    </Link>
+                    <Link
+                      href="/trainer/sessions"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="text-gray-300"
+                    >
+                      Video Sessions
+                    </Link>
+                    <Link
+                      href="/trainer/packages"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="text-gray-300"
+                    >
+                      Packages
+                    </Link>
                   </>
                 ) : (
                   <Link
-                    href="/trainer/programs"
+                    href="/admin/trainers"
                     onClick={() => setMobileMenuOpen(false)}
                     className="text-gray-300"
                   >
-                    Programs
-                  </Link>
-                )}
-                <Link
-                  href={user.role === "TRAINER" ? "/trainer/sessions" : "/sessions"}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="text-gray-300"
-                >
-                  Video Sessions
-                </Link>
-                {user.role === "TRAINER" && (
-                  <Link
-                    href="/trainer/packages"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="text-gray-300"
-                  >
-                    Packages
+                    Coach Verifications
                   </Link>
                 )}
                 <Link

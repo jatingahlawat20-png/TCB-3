@@ -9,7 +9,13 @@ import { paiseToRupees } from "@/lib/razorpay";
 
 export const dynamic = "force-dynamic";
 
-export default async function TrainerDashboardPage() {
+type Props = {
+  searchParams?: Promise<{ onboarding?: string }>;
+};
+
+export default async function TrainerDashboardPage(props: Props) {
+  const searchParams = props.searchParams ? await props.searchParams : undefined;
+  const isJustPublished = searchParams?.onboarding === "published";
   const user = await requireUser(["TRAINER", "ADMIN"]);
 
   // Fetch incoming coaching requests, packages, conversations, unread count, and payments
@@ -168,6 +174,36 @@ export default async function TrainerDashboardPage() {
       <Navbar />
 
       <section className="mx-auto max-w-7xl px-6 py-12 md:px-8">
+        {isJustPublished && (
+          <div className="mb-8 rounded-3xl border border-[#7CFF3B]/40 bg-gradient-to-r from-[#142316] via-[#11161D] to-[#142316] p-6 shadow-[0_15px_40px_rgba(124,255,59,0.15)]">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <span className="text-4xl">🎉</span>
+                <div>
+                  <h3 className="text-xl font-black text-white">You're Live on TCB-3!</h3>
+                  <p className="text-sm text-gray-300 mt-1">
+                    Your coaching profile has been automatically verified and published. Clients can now discover you in the marketplace.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href={`/trainers/${user.id}`}
+                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-white transition hover:border-[#7CFF3B] hover:text-[#7CFF3B]"
+                >
+                  View Public Profile →
+                </Link>
+                <Link
+                  href="/trainers"
+                  className="rounded-xl bg-[#7CFF3B] px-4 py-2 text-xs font-black text-black transition hover:scale-105 hover:bg-[#68e326]"
+                >
+                  Explore Marketplace →
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header greeting */}
         <div className="flex flex-col justify-between gap-4 border-b border-white/10 pb-8 md:flex-row md:items-end">
           <div>
