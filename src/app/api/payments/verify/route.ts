@@ -42,11 +42,62 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // 2. IDEMPOTENCY GUARD: If already marked PAID, return existing verified record
+    // 2. IDEMPOTENCY GUARD: If already marked PAID, ensure coaching request & conversation exist before returning
     if (existingPayment.status === "PAID") {
+      if (existingPayment.coachingRequestId) {
+        await prisma.coachingRequest.update({
+          where: { id: existingPayment.coachingRequestId },
+          data: { status: "ACCEPTED" },
+        });
+      } else {
+        const existingReq = await prisma.coachingRequest.findFirst({
+          where: {
+            clientId: existingPayment.clientId,
+            trainerId: existingPayment.trainerId,
+          },
+          orderBy: { createdAt: "desc" },
+        });
+
+        if (existingReq) {
+          await prisma.coachingRequest.update({
+            where: { id: existingReq.id },
+            data: {
+              status: "ACCEPTED",
+              packageId: existingPayment.packageId || existingReq.packageId,
+            },
+          });
+        } else {
+          await prisma.coachingRequest.create({
+            data: {
+              clientId: existingPayment.clientId,
+              trainerId: existingPayment.trainerId,
+              packageId: existingPayment.packageId,
+              goal: "1-on-1 Personalized Coaching",
+              message: `Direct package purchase: ${existingPayment.package?.name || "1-on-1 Coaching"}`,
+              status: "ACCEPTED",
+              startDate: new Date(),
+            },
+          });
+        }
+      }
+
+      await prisma.conversation.upsert({
+        where: {
+          clientId_trainerId: {
+            clientId: existingPayment.clientId,
+            trainerId: existingPayment.trainerId,
+          },
+        },
+        update: {},
+        create: {
+          clientId: existingPayment.clientId,
+          trainerId: existingPayment.trainerId,
+        },
+      });
+
       return NextResponse.json({
         success: true,
-        message: "Payment was previously verified and processed.",
+        message: "Payment was previously verified and coaching relationship confirmed.",
         payment: existingPayment,
       });
     }

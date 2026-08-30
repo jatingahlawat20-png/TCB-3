@@ -159,8 +159,8 @@ export default async function ClientDashboardPage() {
       status: p.status,
       packageName: p.package?.name || "Coaching Package",
       packageDuration: p.package?.duration || "1 Month",
-      trainerName: p.trainer.user.name,
-      trainerEmail: p.trainer.user.email,
+      trainerName: p.trainer?.user?.name || "Assigned Coach",
+      trainerEmail: p.trainer?.user?.email || "",
       razorpayOrderId: p.razorpayOrderId,
       razorpayPaymentId: p.razorpayPaymentId,
       paidAt: p.paidAt ? p.paidAt.toISOString() : null,
@@ -214,7 +214,18 @@ export default async function ClientDashboardPage() {
     statusBadgeText: string;
   } | null = null;
 
-  if (latestPaidPayment && latestPaidPayment.trainer?.user) {
+  if (latestPaidPayment) {
+    const trainerProfile = latestPaidPayment.trainer;
+    const trainerUser = trainerProfile?.user;
+    const trainerName = trainerUser?.name || "Assigned Coach";
+    const trainerEmail = trainerUser?.email || "";
+    const trainerSpecialty = trainerProfile?.specialty || "Certified Personal Trainer";
+    const trainerBio = trainerProfile?.bio || null;
+    const trainerAvatarUrl = trainerProfile?.avatarUrl || null;
+    const trainerRating = trainerProfile?.rating || 4.9;
+    const trainerExperience = trainerProfile?.experience || 6;
+    const trainerId = latestPaidPayment.trainerId;
+
     const matchingReq = sentRequests.find(
       (r) => r.id === latestPaidPayment.coachingRequestId || r.trainerId === latestPaidPayment.trainerId
     );
@@ -244,14 +255,14 @@ export default async function ClientDashboardPage() {
     const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
 
     activeCoaching = {
-      trainerId: latestPaidPayment.trainer.id,
-      trainerName: latestPaidPayment.trainer.user.name,
-      trainerEmail: latestPaidPayment.trainer.user.email,
-      trainerSpecialty: latestPaidPayment.trainer.specialty || "Certified Personal Trainer",
-      trainerBio: latestPaidPayment.trainer.bio,
-      trainerAvatarUrl: latestPaidPayment.trainer.avatarUrl,
-      trainerRating: latestPaidPayment.trainer.rating || 4.9,
-      trainerExperience: latestPaidPayment.trainer.experience || 6,
+      trainerId,
+      trainerName,
+      trainerEmail,
+      trainerSpecialty,
+      trainerBio,
+      trainerAvatarUrl,
+      trainerRating,
+      trainerExperience,
       packageName: latestPaidPayment.package?.name || matchingReq?.package?.name || "1-on-1 Monthly Coaching",
       packageDuration: durationStr,
       packagePrice: (latestPaidPayment.amount || 99900) / 100,
@@ -270,7 +281,18 @@ export default async function ClientDashboardPage() {
       isPaid: true,
       statusBadgeText: "✓ Active Coaching (Paid)",
     };
-  } else if (acceptedRequest && acceptedRequest.trainer?.user) {
+  } else if (acceptedRequest) {
+    const trainerProfile = acceptedRequest.trainer;
+    const trainerUser = trainerProfile?.user;
+    const trainerName = trainerUser?.name || "Assigned Coach";
+    const trainerEmail = trainerUser?.email || "";
+    const trainerSpecialty = trainerProfile?.specialty || "Certified Personal Trainer";
+    const trainerBio = trainerProfile?.bio || null;
+    const trainerAvatarUrl = trainerProfile?.avatarUrl || null;
+    const trainerRating = trainerProfile?.rating || 4.9;
+    const trainerExperience = trainerProfile?.experience || 6;
+    const trainerId = acceptedRequest.trainerId;
+
     const startDate = acceptedRequest.startDate
       ? new Date(acceptedRequest.startDate)
       : acceptedRequest.createdAt
@@ -283,17 +305,17 @@ export default async function ClientDashboardPage() {
     const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
 
     activeCoaching = {
-      trainerId: acceptedRequest.trainer.id,
-      trainerName: acceptedRequest.trainer.user.name,
-      trainerEmail: acceptedRequest.trainer.user.email,
-      trainerSpecialty: acceptedRequest.trainer.specialty || "Certified Personal Trainer",
-      trainerBio: acceptedRequest.trainer.bio,
-      trainerAvatarUrl: acceptedRequest.trainer.avatarUrl,
-      trainerRating: acceptedRequest.trainer.rating || 4.9,
-      trainerExperience: acceptedRequest.trainer.experience || 6,
+      trainerId,
+      trainerName,
+      trainerEmail,
+      trainerSpecialty,
+      trainerBio,
+      trainerAvatarUrl,
+      trainerRating,
+      trainerExperience,
       packageName: acceptedRequest.package?.name || "1-on-1 Monthly Coaching",
       packageDuration: durationStr,
-      packagePrice: acceptedRequest.package?.price || acceptedRequest.trainer.price || 999,
+      packagePrice: acceptedRequest.package?.price || acceptedRequest.trainer?.price || 999,
       packageBenefits: acceptedRequest.package?.benefits || [
         "Customized Workout Split",
         "Targeted Calorie & Macro Goals",
@@ -308,7 +330,18 @@ export default async function ClientDashboardPage() {
       isPaid: isAcceptedPaid,
       statusBadgeText: isAcceptedPaid ? "✓ Active Coaching (Paid)" : "✓ Active 1-on-1 Coaching",
     };
-  } else if (activeProgramWithCoach && activeProgramWithCoach.trainer?.user) {
+  } else if (activeProgramWithCoach) {
+    const trainerProfile = activeProgramWithCoach.trainer;
+    const trainerUser = trainerProfile?.user;
+    const trainerName = trainerUser?.name || "Assigned Coach";
+    const trainerEmail = trainerUser?.email || "";
+    const trainerSpecialty = trainerProfile?.specialty || "Certified Personal Trainer";
+    const trainerBio = trainerProfile?.bio || null;
+    const trainerAvatarUrl = trainerProfile?.avatarUrl || null;
+    const trainerRating = trainerProfile?.rating || 4.9;
+    const trainerExperience = trainerProfile?.experience || 6;
+    const trainerId = activeProgramWithCoach.trainerId;
+
     const startDate = activeProgramWithCoach.startDate
       ? new Date(activeProgramWithCoach.startDate)
       : activeProgramWithCoach.createdAt
@@ -321,17 +354,17 @@ export default async function ClientDashboardPage() {
     const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
 
     activeCoaching = {
-      trainerId: activeProgramWithCoach.trainer.id,
-      trainerName: activeProgramWithCoach.trainer.user.name,
-      trainerEmail: activeProgramWithCoach.trainer.user.email,
-      trainerSpecialty: activeProgramWithCoach.trainer.specialty || "Certified Personal Trainer",
-      trainerBio: activeProgramWithCoach.trainer.bio,
-      trainerAvatarUrl: activeProgramWithCoach.trainer.avatarUrl,
-      trainerRating: activeProgramWithCoach.trainer.rating || 4.9,
-      trainerExperience: activeProgramWithCoach.trainer.experience || 6,
+      trainerId,
+      trainerName,
+      trainerEmail,
+      trainerSpecialty,
+      trainerBio,
+      trainerAvatarUrl,
+      trainerRating,
+      trainerExperience,
       packageName: activeProgramWithCoach.name || "Custom Periodized Split",
       packageDuration: `${activeProgramWithCoach.durationWeeks || 4} Weeks`,
-      packagePrice: activeProgramWithCoach.trainer.price || 999,
+      packagePrice: activeProgramWithCoach.trainer?.price || 999,
       packageBenefits: [
         "Customized Workout Split",
         "Prescribed Exercises & Sets/Reps",
@@ -680,16 +713,41 @@ export default async function ClientDashboardPage() {
               ) : (
                 <div className="mt-6 rounded-2xl border border-white/10 bg-[#0B0F14] p-8 text-center">
                   <div className="text-4xl mb-3">🏋️‍♂️</div>
-                  <h3 className="text-lg font-bold text-white">You haven't selected a trainer yet</h3>
+                  <h3 className="text-lg font-bold text-white">
+                    {recentConversation?.trainer?.user?.name
+                      ? `Connected with Coach ${recentConversation.trainer.user.name}`
+                      : "You haven't selected a trainer yet"}
+                  </h3>
                   <p className="mt-2 text-sm text-gray-400 max-w-md mx-auto">
-                    Compare verified specialists in strength, fat loss, and mobility. Every coaching package starts with a 3-day complimentary chat.
+                    {recentConversation?.trainer?.user?.name
+                      ? `You are connected with Coach ${recentConversation.trainer.user.name} on complimentary chat. Enroll in a coaching package below to activate custom workout splits, nutrition goals, and scheduled 1-on-1 video reviews.`
+                      : "Compare verified specialists in strength, fat loss, and mobility. Every coaching package starts with a 3-day complimentary chat."}
                   </p>
-                  <Link
-                    href="/trainers"
-                    className="mt-6 inline-block rounded-xl bg-[#7CFF3B] px-6 py-3 text-xs font-bold text-black transition hover:scale-105"
-                  >
-                    Find Your Coach Now →
-                  </Link>
+                  <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                    {recentConversation?.trainer ? (
+                      <>
+                        <Link
+                          href={`/trainers/${recentConversation.trainer.id}`}
+                          className="rounded-xl bg-[#7CFF3B] px-6 py-3 text-xs font-bold text-black transition hover:scale-105"
+                        >
+                          View {recentConversation.trainer.user.name.split(" ")[0]}'s Packages →
+                        </Link>
+                        <Link
+                          href={`/messages?conversationId=${recentConversation.id}`}
+                          className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-semibold text-white hover:border-[#7CFF3B]"
+                        >
+                          Open Direct Chat →
+                        </Link>
+                      </>
+                    ) : (
+                      <Link
+                        href="/trainers"
+                        className="inline-block rounded-xl bg-[#7CFF3B] px-6 py-3 text-xs font-bold text-black transition hover:scale-105"
+                      >
+                        Find Your Coach Now →
+                      </Link>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
