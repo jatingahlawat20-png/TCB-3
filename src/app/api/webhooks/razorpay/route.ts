@@ -35,75 +35,77 @@ export async function POST(req: NextRequest) {
         });
 
         if (existing && existing.status !== "PAID") {
-          await prisma.payment.update({
-            where: { id: existing.id },
-            data: {
-              status: "PAID",
-              razorpayPaymentId: paymentId || existing.razorpayPaymentId,
-              paidAt: new Date(),
-            },
-          });
-
-          let finalCoachingRequestId = existing.coachingRequestId;
-          if (existing.coachingRequestId) {
-            await prisma.coachingRequest.update({
-              where: { id: existing.coachingRequestId },
-              data: { status: "ACCEPTED" },
-            });
-          } else {
-            const existingReq = await prisma.coachingRequest.findFirst({
-              where: {
-                clientId: existing.clientId,
-                trainerId: existing.trainerId,
+          await prisma.$transaction(async (tx) => {
+            await tx.payment.update({
+              where: { id: existing.id },
+              data: {
+                status: "PAID",
+                razorpayPaymentId: paymentId || existing.razorpayPaymentId,
+                paidAt: new Date(),
               },
-              orderBy: { createdAt: "desc" },
             });
 
-            if (existingReq) {
-              const updatedReq = await prisma.coachingRequest.update({
-                where: { id: existingReq.id },
-                data: {
-                  status: "ACCEPTED",
-                  packageId: existing.packageId || existingReq.packageId,
-                },
+            let finalCoachingRequestId = existing.coachingRequestId;
+            if (existing.coachingRequestId) {
+              await tx.coachingRequest.update({
+                where: { id: existing.coachingRequestId },
+                data: { status: "ACCEPTED" },
               });
-              finalCoachingRequestId = updatedReq.id;
             } else {
-              const newReq = await prisma.coachingRequest.create({
-                data: {
+              const existingReq = await tx.coachingRequest.findFirst({
+                where: {
                   clientId: existing.clientId,
                   trainerId: existing.trainerId,
-                  packageId: existing.packageId,
-                  goal: "1-on-1 Personalized Coaching",
-                  message: "Direct package purchase",
-                  status: "ACCEPTED",
-                  startDate: new Date(),
                 },
+                orderBy: { createdAt: "desc" },
               });
-              finalCoachingRequestId = newReq.id;
+
+              if (existingReq) {
+                const updatedReq = await tx.coachingRequest.update({
+                  where: { id: existingReq.id },
+                  data: {
+                    status: "ACCEPTED",
+                    packageId: existing.packageId || existingReq.packageId,
+                  },
+                });
+                finalCoachingRequestId = updatedReq.id;
+              } else {
+                const newReq = await tx.coachingRequest.create({
+                  data: {
+                    clientId: existing.clientId,
+                    trainerId: existing.trainerId,
+                    packageId: existing.packageId,
+                    goal: "1-on-1 Personalized Coaching",
+                    message: "Direct package purchase",
+                    status: "ACCEPTED",
+                    startDate: new Date(),
+                  },
+                });
+                finalCoachingRequestId = newReq.id;
+              }
+
+              if (finalCoachingRequestId) {
+                await tx.payment.update({
+                  where: { id: existing.id },
+                  data: { coachingRequestId: finalCoachingRequestId },
+                });
+              }
             }
 
-            if (finalCoachingRequestId) {
-              await prisma.payment.update({
-                where: { id: existing.id },
-                data: { coachingRequestId: finalCoachingRequestId },
-              });
-            }
-          }
-
-          // Ensure conversation exists between client and trainer
-          await prisma.conversation.upsert({
-            where: {
-              clientId_trainerId: {
+            // Ensure conversation exists between client and trainer
+            await tx.conversation.upsert({
+              where: {
+                clientId_trainerId: {
+                  clientId: existing.clientId,
+                  trainerId: existing.trainerId,
+                },
+              },
+              update: {},
+              create: {
                 clientId: existing.clientId,
                 trainerId: existing.trainerId,
               },
-            },
-            update: {},
-            create: {
-              clientId: existing.clientId,
-              trainerId: existing.trainerId,
-            },
+            });
           });
         }
       }

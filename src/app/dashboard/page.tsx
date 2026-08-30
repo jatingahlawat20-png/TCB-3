@@ -743,39 +743,18 @@ export default async function ClientDashboardPage() {
                 <div className="mt-6 rounded-2xl border border-white/10 bg-[#0B0F14] p-8 text-center">
                   <div className="text-4xl mb-3">🏋️‍♂️</div>
                   <h3 className="text-lg font-bold text-white">
-                    {recentConversation?.trainer?.user?.name
-                      ? `Connected with Coach ${recentConversation.trainer.user.name}`
-                      : "You haven't selected a trainer yet"}
+                    You haven't selected a trainer yet
                   </h3>
                   <p className="mt-2 text-sm text-gray-400 max-w-md mx-auto">
-                    {recentConversation?.trainer?.user?.name
-                      ? `You are connected with Coach ${recentConversation.trainer.user.name} on complimentary chat. Enroll in a coaching package below to activate custom workout splits, nutrition goals, and scheduled 1-on-1 video reviews.`
-                      : "Compare verified specialists in strength, fat loss, and mobility. Every coaching package starts with a 3-day complimentary chat."}
+                    Compare verified specialists in strength, fat loss, and mobility. Every coaching package starts with a 3-day complimentary chat.
                   </p>
                   <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                    {recentConversation?.trainer ? (
-                      <>
-                        <Link
-                          href={`/trainers/${recentConversation.trainer.id}`}
-                          className="rounded-xl bg-[#7CFF3B] px-6 py-3 text-xs font-bold text-black transition hover:scale-105"
-                        >
-                          View {recentConversation.trainer.user.name.split(" ")[0]}'s Packages →
-                        </Link>
-                        <Link
-                          href={`/messages?conversationId=${recentConversation.id}`}
-                          className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-semibold text-white hover:border-[#7CFF3B]"
-                        >
-                          Open Direct Chat →
-                        </Link>
-                      </>
-                    ) : (
-                      <Link
-                        href="/trainers"
-                        className="inline-block rounded-xl bg-[#7CFF3B] px-6 py-3 text-xs font-bold text-black transition hover:scale-105"
-                      >
-                        Find Your Coach Now →
-                      </Link>
-                    )}
+                    <Link
+                      href="/trainers"
+                      className="inline-block rounded-xl bg-[#7CFF3B] px-6 py-3 text-xs font-bold text-black transition hover:scale-105"
+                    >
+                      Find Your Coach Now →
+                    </Link>
                   </div>
                 </div>
               )}

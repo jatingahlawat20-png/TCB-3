@@ -35,6 +35,7 @@ export function CheckoutButton({
 }: CheckoutButtonProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [verificationStep, setVerificationStep] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Sandbox Modal State
@@ -55,8 +56,10 @@ export function CheckoutButton({
   };
 
   const handleCheckout = async () => {
+    if (loading) return;
     setError(null);
     setLoading(true);
+    setVerificationStep(null);
 
     try {
       // 1. Create order on server (server verifies package price from Prisma DB)
@@ -120,6 +123,7 @@ export function CheckoutButton({
         modal: {
           ondismiss: function () {
             setLoading(false);
+            setVerificationStep(null);
           },
         },
       };
@@ -130,6 +134,7 @@ export function CheckoutButton({
       console.error("Checkout initialization error:", err);
       setError(err.message || "Something went wrong initiating checkout");
       setLoading(false);
+      setVerificationStep(null);
     }
   };
 
@@ -140,6 +145,9 @@ export function CheckoutButton({
   }) => {
     try {
       setLoading(true);
+      setError(null);
+      setVerificationStep("Verifying Payment...");
+
       const verifyRes = await fetch("/api/payments/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -147,23 +155,27 @@ export function CheckoutButton({
       });
 
       const verifyData = await verifyRes.json();
-      if (!verifyRes.ok || !verifyData.success) {
-        throw new Error(verifyData.error || "Payment signature verification failed");
+      if (!verifyRes.ok || !verifyData.success || !verifyData.coachingActivated) {
+        throw new Error(
+          verifyData.error ||
+            "Payment was received, but coaching activation could not be confirmed. Please contact support or try refreshing."
+        );
       }
 
+      setVerificationStep("Activating Coaching...");
       setSandboxModalOpen(false);
 
       if (onSuccess) {
         onSuccess(verifyData.payment);
       }
 
-      router.push("/dashboard?payment=success");
-      router.refresh();
+      // Hard redirect to dashboard ensures fresh server component fetch with zero client cache staleness
+      window.location.href = "/dashboard?payment=success";
     } catch (err: any) {
       console.error("Payment verification error:", err);
       setError(err.message || "Payment verification failed");
-    } finally {
       setLoading(false);
+      setVerificationStep(null);
     }
   };
 
@@ -181,7 +193,7 @@ export function CheckoutButton({
           {loading ? (
             <>
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-black border-t-transparent" />
-              <span>Processing...</span>
+              <span>{verificationStep || "Processing..."}</span>
             </>
           ) : (
             <span>{buttonText || `Enroll & Pay ₹${price}`}</span>

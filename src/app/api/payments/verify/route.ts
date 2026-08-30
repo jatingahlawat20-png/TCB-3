@@ -44,69 +44,75 @@ export async function POST(req: NextRequest) {
 
     // 2. IDEMPOTENCY GUARD: If already marked PAID, ensure coaching request & conversation exist before returning
     if (existingPayment.status === "PAID") {
-      let finalCoachingRequestId = existingPayment.coachingRequestId;
-      if (existingPayment.coachingRequestId) {
-        await prisma.coachingRequest.update({
-          where: { id: existingPayment.coachingRequestId },
-          data: { status: "ACCEPTED" },
-        });
-      } else {
-        const existingReq = await prisma.coachingRequest.findFirst({
-          where: {
-            clientId: existingPayment.clientId,
-            trainerId: existingPayment.trainerId,
-          },
-          orderBy: { createdAt: "desc" },
-        });
-
-        if (existingReq) {
-          const updatedReq = await prisma.coachingRequest.update({
-            where: { id: existingReq.id },
-            data: {
-              status: "ACCEPTED",
-              packageId: existingPayment.packageId || existingReq.packageId,
-            },
+      await prisma.$transaction(async (tx) => {
+        let finalCoachingRequestId = existingPayment.coachingRequestId;
+        if (existingPayment.coachingRequestId) {
+          await tx.coachingRequest.update({
+            where: { id: existingPayment.coachingRequestId },
+            data: { status: "ACCEPTED" },
           });
-          finalCoachingRequestId = updatedReq.id;
         } else {
-          const newReq = await prisma.coachingRequest.create({
-            data: {
+          const existingReq = await tx.coachingRequest.findFirst({
+            where: {
               clientId: existingPayment.clientId,
               trainerId: existingPayment.trainerId,
-              packageId: existingPayment.packageId,
-              goal: "1-on-1 Personalized Coaching",
-              message: `Direct package purchase: ${existingPayment.package?.name || "1-on-1 Coaching"}`,
-              status: "ACCEPTED",
-              startDate: new Date(),
             },
+            orderBy: { createdAt: "desc" },
           });
-          finalCoachingRequestId = newReq.id;
+
+          if (existingReq) {
+            const updatedReq = await tx.coachingRequest.update({
+              where: { id: existingReq.id },
+              data: {
+                status: "ACCEPTED",
+                packageId: existingPayment.packageId || existingReq.packageId,
+              },
+            });
+            finalCoachingRequestId = updatedReq.id;
+          } else {
+            const newReq = await tx.coachingRequest.create({
+              data: {
+                clientId: existingPayment.clientId,
+                trainerId: existingPayment.trainerId,
+                packageId: existingPayment.packageId,
+                goal: "1-on-1 Personalized Coaching",
+                message: `Direct package purchase: ${existingPayment.package?.name || "1-on-1 Coaching"}`,
+                status: "ACCEPTED",
+                startDate: new Date(),
+              },
+            });
+            finalCoachingRequestId = newReq.id;
+          }
+
+          if (finalCoachingRequestId) {
+            await tx.payment.update({
+              where: { id: existingPayment.id },
+              data: { coachingRequestId: finalCoachingRequestId },
+            });
+          }
         }
 
-        if (finalCoachingRequestId) {
-          await prisma.payment.update({
-            where: { id: existingPayment.id },
-            data: { coachingRequestId: finalCoachingRequestId },
-          });
-        }
-      }
-
-      await prisma.conversation.upsert({
-        where: {
-          clientId_trainerId: {
+        await tx.conversation.upsert({
+          where: {
+            clientId_trainerId: {
+              clientId: existingPayment.clientId,
+              trainerId: existingPayment.trainerId,
+            },
+          },
+          update: {},
+          create: {
             clientId: existingPayment.clientId,
             trainerId: existingPayment.trainerId,
           },
-        },
-        update: {},
-        create: {
-          clientId: existingPayment.clientId,
-          trainerId: existingPayment.trainerId,
-        },
+        });
       });
 
       return NextResponse.json({
         success: true,
+        paymentStatus: "PAID",
+        coachingActivated: true,
+        alreadyProcessed: true,
+        trainerId: existingPayment.trainerId,
         message: "Payment was previously verified and coaching relationship confirmed.",
         payment: existingPayment,
       });
@@ -133,105 +139,125 @@ export async function POST(req: NextRequest) {
       });
 
       return NextResponse.json(
-        { error: "Invalid payment signature verification failed" },
+        {
+          success: false,
+          paymentStatus: "FAILED",
+          coachingActivated: false,
+          error: "Invalid payment signature verification failed",
+        },
         { status: 400 }
       );
     }
 
-    // 4. Update Payment to PAID with verified timestamp
-    const updatedPayment = await prisma.payment.update({
-      where: { id: existingPayment.id },
-      data: {
-        status: "PAID",
-        razorpayPaymentId: razorpay_payment_id,
-        razorpaySignature: razorpay_signature,
-        paidAt: new Date(),
-      },
-      include: {
-        package: true,
-        trainer: {
-          include: {
-            user: { select: { id: true, name: true, email: true } },
+    // 4. ATOMIC DATABASE TRANSACTION: Update Payment to PAID and activate Coaching Request & Conversation
+    const updatedPayment = await prisma.$transaction(async (tx) => {
+      // 4a. Update Payment status
+      const paidPayment = await tx.payment.update({
+        where: { id: existingPayment.id },
+        data: {
+          status: "PAID",
+          razorpayPaymentId: razorpay_payment_id,
+          razorpaySignature: razorpay_signature,
+          paidAt: new Date(),
+        },
+        include: {
+          package: true,
+          trainer: {
+            include: {
+              user: { select: { id: true, name: true, email: true } },
+            },
           },
         },
-      },
+      });
+
+      // 4b. Connect / activate coaching relationship
+      let finalCoachingRequestId = existingPayment.coachingRequestId;
+      if (existingPayment.coachingRequestId) {
+        await tx.coachingRequest.update({
+          where: { id: existingPayment.coachingRequestId },
+          data: { status: "ACCEPTED" },
+        });
+      } else {
+        const existingReq = await tx.coachingRequest.findFirst({
+          where: {
+            clientId: existingPayment.clientId,
+            trainerId: existingPayment.trainerId,
+          },
+          orderBy: { createdAt: "desc" },
+        });
+
+        if (existingReq) {
+          const updatedReq = await tx.coachingRequest.update({
+            where: { id: existingReq.id },
+            data: {
+              status: "ACCEPTED",
+              packageId: existingPayment.packageId || existingReq.packageId,
+            },
+          });
+          finalCoachingRequestId = updatedReq.id;
+        } else {
+          const newReq = await tx.coachingRequest.create({
+            data: {
+              clientId: existingPayment.clientId,
+              trainerId: existingPayment.trainerId,
+              packageId: existingPayment.packageId,
+              goal: "1-on-1 Personalized Coaching",
+              message: `Direct package purchase: ${existingPayment.package?.name || "1-on-1 Coaching"}`,
+              status: "ACCEPTED",
+              startDate: new Date(),
+            },
+          });
+          finalCoachingRequestId = newReq.id;
+        }
+
+        if (finalCoachingRequestId) {
+          await tx.payment.update({
+            where: { id: existingPayment.id },
+            data: { coachingRequestId: finalCoachingRequestId },
+          });
+        }
+      }
+
+      // 4c. Ensure Conversation exists between Client and Trainer for chat access
+      await tx.conversation.upsert({
+        where: {
+          clientId_trainerId: {
+            clientId: existingPayment.clientId,
+            trainerId: existingPayment.trainerId,
+          },
+        },
+        update: {},
+        create: {
+          clientId: existingPayment.clientId,
+          trainerId: existingPayment.trainerId,
+        },
+      });
+
+      return paidPayment;
     });
 
     console.log(
       `[Payment Success] Order ${razorpay_order_id} verified successfully. Amount: ₹${updatedPayment.amount / 100} (${updatedPayment.package?.name || "Package"}). Status updated to PAID.`
     );
 
-    // 5. Connect / activate coaching relationship
-    let finalCoachingRequestId = existingPayment.coachingRequestId;
-    if (existingPayment.coachingRequestId) {
-      await prisma.coachingRequest.update({
-        where: { id: existingPayment.coachingRequestId },
-        data: { status: "ACCEPTED" },
-      });
-    } else {
-      // Direct package purchase: find existing request or create an active ACCEPTED coaching request
-      const existingReq = await prisma.coachingRequest.findFirst({
-        where: {
-          clientId: existingPayment.clientId,
-          trainerId: existingPayment.trainerId,
-        },
-        orderBy: { createdAt: "desc" },
-      });
-
-      if (existingReq) {
-        const updatedReq = await prisma.coachingRequest.update({
-          where: { id: existingReq.id },
-          data: {
-            status: "ACCEPTED",
-            packageId: existingPayment.packageId || existingReq.packageId,
-          },
-        });
-        finalCoachingRequestId = updatedReq.id;
-      } else {
-        const newReq = await prisma.coachingRequest.create({
-          data: {
-            clientId: existingPayment.clientId,
-            trainerId: existingPayment.trainerId,
-            packageId: existingPayment.packageId,
-            goal: "1-on-1 Personalized Coaching",
-            message: `Direct package purchase: ${existingPayment.package?.name || "1-on-1 Coaching"}`,
-            status: "ACCEPTED",
-            startDate: new Date(),
-          },
-        });
-        finalCoachingRequestId = newReq.id;
-      }
-
-      if (finalCoachingRequestId) {
-        await prisma.payment.update({
-          where: { id: existingPayment.id },
-          data: { coachingRequestId: finalCoachingRequestId },
-        });
-      }
-    }
-
-    // 6. Ensure Conversation exists between Client and Trainer for chat access
-    await prisma.conversation.upsert({
-      where: {
-        clientId_trainerId: {
-          clientId: existingPayment.clientId,
-          trainerId: existingPayment.trainerId,
-        },
-      },
-      update: {},
-      create: {
-        clientId: existingPayment.clientId,
-        trainerId: existingPayment.trainerId,
-      },
-    });
-
     return NextResponse.json({
       success: true,
-      message: "Payment verified successfully and coaching package activated.",
+      paymentStatus: "PAID",
+      coachingActivated: true,
+      trainerId: existingPayment.trainerId,
+      message: "Payment verified and coaching relationship activated.",
       payment: updatedPayment,
     });
-  } catch (error) {
-    console.error("Error verifying payment:", error);
-    return NextResponse.json({ error: "Internal server error during verification" }, { status: 500 });
+  } catch (error: any) {
+    console.error("Error verifying Razorpay payment:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        paymentStatus: "ERROR",
+        coachingActivated: false,
+        error: error?.message || "Internal server error verifying payment",
+      },
+      { status: 500 }
+    );
   }
 }
