@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
             },
           });
 
+          let finalCoachingRequestId = existing.coachingRequestId;
           if (existing.coachingRequestId) {
             await prisma.coachingRequest.update({
               where: { id: existing.coachingRequestId },
@@ -59,15 +60,16 @@ export async function POST(req: NextRequest) {
             });
 
             if (existingReq) {
-              await prisma.coachingRequest.update({
+              const updatedReq = await prisma.coachingRequest.update({
                 where: { id: existingReq.id },
                 data: {
                   status: "ACCEPTED",
                   packageId: existing.packageId || existingReq.packageId,
                 },
               });
+              finalCoachingRequestId = updatedReq.id;
             } else {
-              await prisma.coachingRequest.create({
+              const newReq = await prisma.coachingRequest.create({
                 data: {
                   clientId: existing.clientId,
                   trainerId: existing.trainerId,
@@ -77,6 +79,14 @@ export async function POST(req: NextRequest) {
                   status: "ACCEPTED",
                   startDate: new Date(),
                 },
+              });
+              finalCoachingRequestId = newReq.id;
+            }
+
+            if (finalCoachingRequestId) {
+              await prisma.payment.update({
+                where: { id: existing.id },
+                data: { coachingRequestId: finalCoachingRequestId },
               });
             }
           }
