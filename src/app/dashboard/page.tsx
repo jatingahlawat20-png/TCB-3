@@ -170,8 +170,37 @@ export default async function ClientDashboardPage() {
     console.error("Error fetching client dashboard data:", err);
   }
 
-  // 1. Helper to determine if a coaching request or trainer relationship has a verified payment
+  // 1. Combine Coaching Requests and Direct Package Payments for complete history
+  const combinedHistory = [...sentRequests];
+
+  // Add any paid payments that don't have an exact matching coaching request in sentRequests
+  for (const payment of rawPaymentsData) {
+    const hasMatchingReq = sentRequests.some(
+      (r) => r.id === payment.coachingRequestId || (r.trainerId === payment.trainerId && payment.status === "PAID")
+    );
+    if (!hasMatchingReq && payment.trainer) {
+      combinedHistory.push({
+        id: `payment-req-${payment.id}`,
+        clientId: payment.clientId,
+        trainerId: payment.trainerId,
+        packageId: payment.packageId,
+        message: `Direct package purchase: ${payment.package?.name || "1-on-1 Coaching"}`,
+        goal: "1-on-1 Personalized Coaching",
+        startDate: payment.paidAt || payment.createdAt,
+        status: payment.status === "PAID" ? "ACCEPTED" : "PENDING",
+        createdAt: payment.createdAt,
+        updatedAt: payment.updatedAt,
+        package: payment.package,
+        trainer: payment.trainer,
+        isSyntheticFromPayment: true,
+        paymentId: payment.id,
+      });
+    }
+  }
+
+  // 2. Helper to determine if a coaching request or trainer relationship has a verified payment
   const isRequestPaid = (req: any) => {
+    if (req.isSyntheticFromPayment) return true;
     return rawPaymentsData.some(
       (p) =>
         p.status?.toUpperCase() === "PAID" &&
@@ -180,12 +209,12 @@ export default async function ClientDashboardPage() {
     );
   };
 
-  // 2. Comprehensive Multi-Source Active Coaching Resolution
+  // 3. Comprehensive Multi-Source Active Coaching Resolution
   // Source A: Verified PAID payment (Highest Priority)
   const latestPaidPayment = rawPaymentsData.find((p) => p.status?.toUpperCase() === "PAID");
 
   // Source B: Accepted Coaching Request
-  const acceptedRequest = sentRequests.find((r) => r.status?.toUpperCase() === "ACCEPTED");
+  const acceptedRequest = combinedHistory.find((r) => r.status?.toUpperCase() === "ACCEPTED");
   const isAcceptedPaid = acceptedRequest ? isRequestPaid(acceptedRequest) : false;
 
   // Source C: Active Workout Program assigned by a coach
@@ -226,7 +255,7 @@ export default async function ClientDashboardPage() {
     const trainerExperience = trainerProfile?.experience || 6;
     const trainerId = latestPaidPayment.trainerId;
 
-    const matchingReq = sentRequests.find(
+    const matchingReq = combinedHistory.find(
       (r) => r.id === latestPaidPayment.coachingRequestId || r.trainerId === latestPaidPayment.trainerId
     );
     const startDate = latestPaidPayment.paidAt
@@ -383,7 +412,7 @@ export default async function ClientDashboardPage() {
   const pendingPaymentRequest = !activeCoaching && acceptedRequest && !isAcceptedPaid ? acceptedRequest : null;
 
   // Pending review request: Sent by client, awaiting coach decision
-  const pendingReviewRequest = !activeCoaching && !pendingPaymentRequest ? sentRequests.find((r) => r.status === "PENDING") : null;
+  const pendingReviewRequest = !activeCoaching && !pendingPaymentRequest ? combinedHistory.find((r) => r.status === "PENDING") : null;
 
   return (
     <main className="min-h-screen bg-[#080B0F] text-white">
@@ -800,28 +829,31 @@ export default async function ClientDashboardPage() {
               </div>
             )}
 
-            {/* Coaching Requests History */}
+            {/* Coaching Requests & Packages History */}
             <div className="rounded-[32px] border border-white/10 bg-[#11161D] p-8 shadow-[0_20px_50px_rgba(0,0,0,0.4)]">
               <div className="flex items-center justify-between border-b border-white/10 pb-5">
                 <div>
-                  <h2 className="text-2xl font-bold text-white">Coaching Requests History</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">Applications sent to coaches and packages</p>
+                  <h2 className="text-2xl font-bold text-white">Coaching Requests & Packages History</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">Applications sent, enrolled packages, and coaching plans</p>
                 </div>
                 <span className="text-xs text-gray-400">
-                  {sentRequests.length} Total
+                  {combinedHistory.length} Total
                 </span>
               </div>
 
-              {sentRequests.length > 0 ? (
+              {combinedHistory.length > 0 ? (
                 <div className="mt-6 divide-y divide-white/10">
-                  {sentRequests.map((req) => {
+                  {combinedHistory.map((req) => {
                     const isPaid = isRequestPaid(req);
+                    const trainerName = req.trainer?.user?.name || "Assigned Coach";
+                    const trainerPrice = req.package?.price || req.trainer?.price || 999;
+                    const trainerId = req.trainer?.id || req.trainerId;
 
                     return (
                       <div key={req.id} className="py-4 flex flex-col gap-3 sm:flex-row sm:items-center justify-between">
                         <div>
                           <div className="flex items-center gap-2.5">
-                            <h4 className="font-bold text-white">{req.trainer.user.name}</h4>
+                            <h4 className="font-bold text-white">{trainerName}</h4>
                             <span
                               className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${
                                 req.status === "ACCEPTED"
@@ -841,7 +873,7 @@ export default async function ClientDashboardPage() {
                             </span>
                           </div>
                           <p className="text-xs text-gray-400 mt-1">
-                            Package: <span className="text-white font-medium">{req.package?.name || "1-on-1 Coaching"}</span> ({req.package?.duration || "1 Month"} — ₹{req.package?.price || req.trainer.price}) • Goal: {req.goal}
+                            Package: <span className="text-white font-medium">{req.package?.name || "1-on-1 Coaching"}</span> ({req.package?.duration || "1 Month"} — ₹{trainerPrice}) • Goal: {req.goal}
                           </p>
                           <p className="text-xs text-gray-500 mt-1 italic line-clamp-1">
                             "{req.message}"
@@ -854,8 +886,8 @@ export default async function ClientDashboardPage() {
                               packageName={req.package.name}
                               price={req.package.price}
                               duration={req.package.duration}
-                              trainerName={req.trainer.user.name}
-                              coachingRequestId={req.id}
+                              trainerName={trainerName}
+                              coachingRequestId={req.id.startsWith("payment-req-") ? undefined : req.id}
                               buttonText={`Pay ₹${req.package.price}`}
                               className="inline-flex items-center justify-center rounded-xl bg-[#7CFF3B] px-3.5 py-1.5 text-xs font-bold text-black transition hover:bg-[#68e02d]"
                             />
@@ -865,18 +897,22 @@ export default async function ClientDashboardPage() {
                               ✓ Paid & Active
                             </span>
                           )}
-                          <Link
-                            href={`/messages?trainerId=${req.trainer.id}`}
-                            className="text-xs font-semibold text-[#7CFF3B] hover:underline"
-                          >
-                            Chat →
-                          </Link>
-                          <Link
-                            href={`/trainers`}
-                            className="text-xs font-semibold text-gray-400 hover:text-white"
-                          >
-                            Profile
-                          </Link>
+                          {trainerId && (
+                            <Link
+                              href={`/messages?trainerId=${trainerId}`}
+                              className="text-xs font-semibold text-[#7CFF3B] hover:underline"
+                            >
+                              Chat →
+                            </Link>
+                          )}
+                          {trainerId && (
+                            <Link
+                              href={`/trainers/${trainerId}`}
+                              className="text-xs font-semibold text-gray-400 hover:text-white"
+                            >
+                              Profile
+                            </Link>
+                          )}
                         </div>
                       </div>
                     );
